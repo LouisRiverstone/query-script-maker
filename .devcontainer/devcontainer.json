@@ -1,0 +1,23 @@
+{
+    "name": "Go Api",
+    "dockerComposeFile": "../docker-compose.yml",
+    "service": "app_dev",
+    "workspaceFolder": "/app",
+    "customizations": {
+      "vscode": {
+        "extensions": [
+            "mhutchie.git-graph",
+            "usernamehw.errorlens",
+            "github.copilot",
+            "github.copilot-chat",
+            "golang.Go",
+            "Vue.volar",
+            "bradlc.vscode-tailwindcss"
+        ]
+      }
+    },
+    "mounts": [
+      "source=./,target=/app,type=bind",
+      "source=${localEnv:HOME}/.ssh/id_rsa,target=/root/.ssh/id_rsa,type=bind"
+    ]
+  }

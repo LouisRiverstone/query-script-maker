@@ -1,0 +1,14 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "sql_script_maker",
+  "outputfilename": "sql_script_maker",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "devServer": "0.0.0.0:34115",
+  "author": {
+    "name": "Luiz Neves",
+    "email": "luizgustavobenicio@gmail.com"
+  }
+}

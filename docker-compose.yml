@@ -1,0 +1,17 @@
+services:
+  app_dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    networks:
+      - ssm-network
+    ports:
+      - "34115:34115"
+      - "5173:5173"
+    volumes:
+      - .:/app
+    tty: true
+      
+networks:
+  ssm-network:
+    driver: bridge

@@ -1,0 +1,44 @@
+<template>
+    <div class="flex flex-col gap-3 w-full">
+        <div v-for="(title, i) in headers" :key="i" class="flex flex-row gap-3">
+            <Input type="text" v-model="fields[i]" :label="title" :id="`${title}[${i}]`" />
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue';
+import Input from './Input.vue';
+import Button from './Button.vue';
+
+const props = defineProps<{
+    headers: string[]
+}>()
+
+const emit = defineEmits(['update:modelValue']);
+
+const fields = ref<string[]>([]);
+
+const variables = computed(() => {
+    return fields.value.reduce((acc, field, i) => {
+        acc.push({ field: props.headers[i], value: field, position: i });
+        return acc;
+    }, [] as { field: string, value: string, position: number }[]);
+});
+
+const parseAsVariableName = (str: string) => {
+    return str.replace(/[^a-zA-Z0-9]/g, '_').toLocaleLowerCase();
+}
+
+onMounted(() => {
+    const tableVars= props.headers.map((header) => {
+        return parseAsVariableName(header);
+    });
+
+    fields.value = [...tableVars];
+});
+
+defineExpose({
+    variables
+});
+</script>
