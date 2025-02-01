@@ -6,10 +6,38 @@ export function CreateSQLFile(arg1) {
   return window['go']['main']['App']['CreateSQLFile'](arg1);
 }
 
+export function CreateSQLiteDatase(arg1) {
+  return window['go']['main']['App']['CreateSQLiteDatase'](arg1);
+}
+
+export function DeleteQuery(arg1) {
+  return window['go']['main']['App']['DeleteQuery'](arg1);
+}
+
+export function ExportDatabaseFile() {
+  return window['go']['main']['App']['ExportDatabaseFile']();
+}
+
+export function GetQueries() {
+  return window['go']['main']['App']['GetQueries']();
+}
+
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
 }
 
+export function ImportDatabaseFile() {
+  return window['go']['main']['App']['ImportDatabaseFile']();
+}
+
+export function InsertQueryInDatabase(arg1) {
+  return window['go']['main']['App']['InsertQueryInDatabase'](arg1);
+}
+
 export function ReadFile() {
   return window['go']['main']['App']['ReadFile']();
+}
+
+export function UpdateQuery(arg1, arg2) {
+  return window['go']['main']['App']['UpdateQuery'](arg1, arg2);
 }

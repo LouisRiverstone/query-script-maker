@@ -3,6 +3,20 @@
 
 export function CreateSQLFile(arg1:string):Promise<string>;
 
+export function CreateSQLiteDatase(arg1:string):Promise<void>;
+
+export function DeleteQuery(arg1:string):Promise<void>;
+
+export function ExportDatabaseFile():Promise<void>;
+
+export function GetQueries():Promise<string>;
+
 export function Greet(arg1:string):Promise<string>;
 
+export function ImportDatabaseFile():Promise<void>;
+
+export function InsertQueryInDatabase(arg1:string):Promise<void>;
+
 export function ReadFile():Promise<string>;
+
+export function UpdateQuery(arg1:string,arg2:string):Promise<void>;

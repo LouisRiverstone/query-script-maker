@@ -1,5 +1,5 @@
 <template>
-    <div class="overflow-x-auto">
+    <div class="overflow-x-auto w-full">
         <table class="min-w-full divide-y-2 divide-gray-200 bg-white text-sm">
             <thead class="ltr:text-left rtl:text-right">
                 <tr>

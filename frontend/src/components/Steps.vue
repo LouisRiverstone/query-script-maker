@@ -1,68 +1,98 @@
 <template>
-    <div class="w-full max-w-2xl mx-auto">
-      <h2 class="sr-only">Steps</h2>
-      <div class="after:mt-4 after:block after:h-1 after:w-full after:rounded-lg after:bg-gray-200">
-        <ol class="grid grid-cols-3 text-sm font-medium text-gray-500">
-          <li v-for="(step, i) in steps" :key="i" class="relative flex text-indigo-600" :class="{
-            'justify-start': i < currentStep,
-            'justify-center': i === currentStep,
-            'justify-end': i > currentStep
+  <div class="flex flex-col gap-3">
+    <h2 class="sr-only">Steps</h2>
+    <div
+      class="relative after:absolute after:inset-x-0 after:top-1/2 after:block after:h-0.5 after:-translate-y-1/2 after:rounded-lg after:bg-gray-100">
+      <ol class="relative z-10 flex justify-between text-sm font-medium text-gray-500">
+        <li class="flex items-center gap-2 bg-gray-200 dark:bg-gray-800 dark:text-white text-gray-900 p-2">
+          <span :class="{
+            'size-6 rounded-full bg-gray-300 dark:bg-gray-700 dark:text-white text-gray-900 text-center text-[10px]/6 font-bold': value !== 0,
+            'size-6 rounded-full bg-indigo-600 text-center text-[10px]/6 font-bold text-white': value === 0
           }">
-            <span class="absolute -bottom-[1.75rem] start-0 rounded-full text-white"
-              :class="{ 
-                'bg-indigo-600': i <= currentStep,
-                'bg-gray-600': i === currentStep,
-                'bg-gray-200': i > currentStep,
-                'start-0': i === 0,
-                '-bottom-[1.75rem] left-1/2 -translate-x-1/2' : i > 0
-              }">
-              <svg class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                  clip-rule="evenodd" />
-              </svg>
-            </span>
-  
-            <span class="hidden sm:block">{{ step.title }}</span>
-  
-            <svg class="size-6 sm:hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-              stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round"
-                d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
-            </svg>
-          </li>
-        </ol>
+            1 </span>
+
+          <span class="hidden sm:block"> {{ props.steps[0] }} </span>
+        </li>
+
+        <li class="flex items-center gap-2 bg-gray-200 dark:bg-gray-800 dark:text-white text-gray-900 p-2">
+          <span :class="{
+            'size-6 rounded-full bg-gray-300 dark:bg-gray-700 dark:text-white text-gray-900 text-center text-[10px]/6 font-bold': value !== 1,
+            'size-6 rounded-full bg-indigo-600 text-center text-[10px]/6 font-bold text-white': value === 1
+          }">
+            2
+          </span>
+
+          <span class="hidden sm:block"> {{ props.steps[1] }} </span>
+        </li>
+
+        <li class="flex items-center gap-2 bg-gray-200 dark:bg-gray-800 dark:text-white text-gray-900 p-2">
+          <span :class="{
+            'size-6 rounded-full bg-gray-300 dark:bg-gray-700 dark:text-white text-gray-900 text-center text-[10px]/6 font-bold': value !== 2,
+            'size-6 rounded-full bg-indigo-600 text-center text-[10px]/6 font-bold text-white': value === 2
+          }">
+            3 </span>
+
+          <span class="hidden sm:block"> {{ props.steps[2] }} </span>
+        </li>
+      </ol>
+    </div>
+
+    <div class="w-full flex flex-col gap-3">
+      <div class=" bg-gray-300 dark:bg-gray-700 px-5 py-3 rounded-md"> 
+        <slot></slot>
+      </div>
+      <div class="flex flex-row sm:justify-end justify-between gap-3">
+        <Button :disabled="!hasPrevious" type="button" @click="prevStep">
+          Previous
+        </Button>
+
+        <Button :disabled="!hasNext" type="button" @click="nextStep">
+          Next
+        </button>
       </div>
     </div>
-  </template>
-  
-  <script lang="ts" setup>
-  import { ref } from "vue"
-  
-  type TStep = {
-    title: string
+  </div>
+</template>
+
+<script lang="ts" setup>
+import { ref, watch, computed } from 'vue';
+import Button from './Button.vue';
+
+const props = defineProps<{
+  steps: string[];
+  modelValue: number;
+  disableNextButton?: boolean;
+}>();
+
+const value = ref(props.modelValue);
+
+const emit = defineEmits<{
+  'update:modelValue': (value: number) => void;
+}>();
+
+const hasPrevious = computed(() => value.value > 0);
+const hasNext = computed(() => value.value < props.steps.length - 1 && !props.disableNextButton);
+
+const nextStep = () => {
+  if (value.value < props.steps.length - 1) {
+    value.value++;
   }
-  
-  const props = defineProps<{
-    steps: TStep[]
-  }>()
-  
-  const currentStep = ref(0)
-  
-  const nextStep = () => {
-    if (currentStep.value < props.steps.length - 1) {
-      currentStep.value++
-    }
+};
+
+const prevStep = () => {
+  if (value.value > 0) {
+    value.value--;
   }
-  
-  const prevStep = () => {
-    if (currentStep.value > 0) {
-      currentStep.value--
-    }
-  }
-  
-  defineExpose({
-    nextStep,
-    prevStep
-  })
-  </script>
+};
+
+watch(() => props.modelValue, (value) => {
+  emit('update:modelValue', value);
+});
+
+watch(() => value.value, (value) => {
+  emit('update:modelValue', value);
+});
+
+</script>
+
+<style scoped></style>
