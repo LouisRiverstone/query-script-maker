@@ -9,7 +9,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import Input from './Input.vue';
-import Button from './Button.vue';
 
 const props = defineProps<{
     headers: string[]
@@ -21,7 +20,9 @@ const fields = ref<string[]>([]);
 
 const variables = computed(() => {
     return fields.value.reduce((acc, field, i) => {
+        console.log(field)
         acc.push({ field: props.headers[i], value: field, position: i });
+        
         return acc;
     }, [] as { field: string, value: string, position: number }[]);
 });

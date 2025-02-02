@@ -31,5 +31,8 @@ ENV GOPATH=/usr/local/go
 # install wails
 RUN go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
+# install delve
+RUN go install github.com/go-delve/delve/cmd/dlv@latest
+
 # make sure wails runs correctly
 RUN wails doctor

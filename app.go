@@ -5,8 +5,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
+	"regexp"
+	"strings"
 
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/xuri/excelize/v2"
 )
@@ -14,6 +18,23 @@ import (
 // App struct
 type App struct {
 	ctx context.Context
+}
+
+// Variable struct
+type Variable struct {
+	Field    string
+	Value    string
+	Position int
+}
+
+type Query struct {
+	ID          *int
+	Title       string
+	Query       string
+	Description string
+	CreatedAt   *string
+	UpdatedAt   *string
+	DeletedAt   *string
 }
 
 // NewApp creates a new App application struct
@@ -25,14 +46,11 @@ func NewApp() *App {
 // so we can call the runtime methods
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+
+	createSqliteTables()
 }
 
-// Greet returns a greeting for the given name
-func (a *App) Greet(name string) string {
-	return fmt.Sprintf("Hello %s, It's show time!", name)
-}
-
-func (a *App) ReadFile() (string, error) {
+func (a *App) ReadXLSXFile() (string, error) {
 	selection, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Select File",
 		Filters: []runtime.FileFilter{
@@ -94,7 +112,33 @@ func (a *App) ReadFile() (string, error) {
 	return string(jsonData), nil
 }
 
-// create sql file
+func (a *App) MakeBindedSQL(query string, data []map[string]interface{}, variables []Variable) string {
+	var result strings.Builder
+
+	re := regexp.MustCompile(`{{\w+}}`)
+
+	for index, row := range data {
+		modifiedQuery := re.ReplaceAllStringFunc(query, func(match string) string {
+			for _, variable := range variables {
+				if match == fmt.Sprintf("{{%s}}", variable.Value) {
+					if value, ok := row[variable.Field]; ok {
+						return fmt.Sprintf("%v", value)
+					}
+				}
+			}
+			return match
+		})
+
+		result.WriteString(modifiedQuery)
+
+		if index != len(data)-1 {
+			result.WriteString("\n")
+		}
+	}
+
+	return result.String()
+}
+
 func (a *App) CreateSQLFile(data string) (string, error) {
 	selection, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		Title: "Save File",
@@ -131,109 +175,95 @@ func (a *App) CreateSQLFile(data string) (string, error) {
 	return selection, nil
 }
 
-func (a *App) CreateSQLiteDatase(data string) error {
-	if _, err := os.Stat("database.db"); os.IsNotExist(err) {
-		//create the file
-		file, err := os.Create("database.db")
+func (a *App) InsertQueryInDatabase(data Query) error {
+	db := openSqliteConnection()
 
-		if err != nil {
-			return err
-		}
+	defer db.Close()
 
-		file.Close()
+	tx, err := db.Begin()
 
-		sqliteDatabase, _ := sql.Open("sqlite3", "./database.db")
-		defer sqliteDatabase.Close() // Defer Closing the database
-		createTable(sqliteDatabase)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+
+	insertQuery := `INSERT INTO queries(title, query, description) VALUES(?, ?, ?)`
+
+	stmt, err := tx.Prepare(insertQuery)
+
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+
+	defer stmt.Close()
+
+	_, err = stmt.Exec(data.Title, data.Query, data.Description)
+
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+
+	err = tx.Commit()
+
+	if err != nil {
+		fmt.Println(err.Error())
 	}
 
 	return nil
 }
 
-func createTable(db *sql.DB) {
-	// Create Table
-	createTableSQL := `CREATE TABLE IF NOT EXISTS queries (
-		"id" integer NOT NULL PRIMARY KEY,
-		"title" TEXT,
-		"query" TEXT
-	);`
+func (a *App) GetQueriesList(withTrashed bool) ([]Query, error) {
+	db := openSqliteConnection()
+	defer db.Close()
 
-	_, err := db.Exec(createTableSQL)
+	var queries []Query = make([]Query, 0)
 
-	if err != nil {
-		fmt.Println(err.Error())
+	var selectQuery string
+
+	if withTrashed {
+		selectQuery = `SELECT * FROM queries`
 	} else {
-		fmt.Println("employees Table is created successfully")
+		selectQuery = `SELECT * FROM queries WHERE deleted_at IS NULL`
 	}
-}
 
-func (a *App) InsertQueryInDatabase(data string) error {
-	sqliteDatabase, _ := sql.Open("sqlite3", "./database.db")
-
-	defer sqliteDatabase.Close() // Defer Closing the database
-
-	insertQuery := `INSERT INTO queries(title, query) VALUES(?, ?)`
-
-	stmt, err := sqliteDatabase.Prepare(insertQuery)
+	rows, err := db.Query(selectQuery)
 
 	if err != nil {
 		fmt.Println(err.Error())
 	}
 
-	_, err = stmt.Exec("Test", data)
-
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-
-	return nil
-}
-
-func (a *App) GetQueries() (string, error) {
-	sqliteDatabase, _ := sql.Open("sqlite3", "./database.db")
-
-	defer sqliteDatabase.Close() // Defer Closing the database
-
-	rows, err := sqliteDatabase.Query("SELECT * FROM queries")
-
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-
-	var content []map[string]string
+	defer rows.Close()
 
 	for rows.Next() {
-		var id int
-		var title string
-		var query string
+		var query Query
 
-		rows.Scan(&id, &title, &query)
+		err = rows.Scan(&query.ID, &query.Title, &query.Query, &query.Description, &query.CreatedAt, &query.UpdatedAt, &query.DeletedAt)
 
-		rowData := make(map[string]string)
-		rowData["id"] = fmt.Sprintf("%d", id)
-		rowData["title"] = title
-		rowData["query"] = query
+		if err != nil {
+			fmt.Println(err.Error())
+			continue
+		}
 
-		content = append(content, rowData)
+		queries = append(queries, query)
 	}
 
-	jsonData, err := json.Marshal(content)
+	err = rows.Err()
 
 	if err != nil {
-		return "", err
+		log.Fatal(err)
 	}
 
-	return string(jsonData), nil
+	return queries, nil
 }
 
-func (a *App) DeleteQuery(id string) error {
-	sqliteDatabase, _ := sql.Open("sqlite3", "./database.db")
+func (a *App) DeleteQuery(id int) error {
 
-	defer sqliteDatabase.Close() // Defer Closing the database
+	db := openSqliteConnection()
 
-	deleteQuery := `DELETE FROM queries WHERE id = ?`
+	defer db.Close()
 
-	stmt, err := sqliteDatabase.Prepare(deleteQuery)
+	deleteQuery := `UPDATE queries SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?`
+
+	stmt, err := db.Prepare(deleteQuery)
 
 	if err != nil {
 		fmt.Println(err.Error())
@@ -248,20 +278,20 @@ func (a *App) DeleteQuery(id string) error {
 	return nil
 }
 
-func (a *App) UpdateQuery(id string, data string) error {
-	sqliteDatabase, _ := sql.Open("sqlite3", "./database.db")
+func (a *App) UpdateQuery(id int, data Query) error {
+	db := openSqliteConnection()
 
-	defer sqliteDatabase.Close() // Defer Closing the database
+	defer db.Close()
 
-	updateQuery := `UPDATE queries SET query = ? WHERE id = ?`
+	updateQuery := `UPDATE queries SET query = ?, description = ? WHERE id = ?`
 
-	stmt, err := sqliteDatabase.Prepare(updateQuery)
+	stmt, err := db.Prepare(updateQuery)
 
 	if err != nil {
 		fmt.Println(err.Error())
 	}
 
-	_, err = stmt.Exec(data, id)
+	_, err = stmt.Exec(data.Query, data.Description, id)
 
 	if err != nil {
 		fmt.Println(err.Error())
@@ -292,7 +322,6 @@ func (a *App) ImportDatabaseFile() error {
 	_, err = os.Stat("database.db")
 
 	if err == nil {
-
 		err = os.Remove("database.db")
 
 		if err != nil {
@@ -341,4 +370,48 @@ func (a *App) ExportDatabaseFile() error {
 	}
 
 	return nil
+}
+
+func openSqliteConnection() *sql.DB {
+	db, err := sql.Open("sqlite3", "./database.db")
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return db
+}
+
+func createSqliteTables() {
+	db := openSqliteConnection()
+
+	defer db.Close()
+
+	createTableSQL := `
+		CREATE TABLE IF NOT EXISTS queries (
+			id integer NOT NULL PRIMARY KEY,
+			title TEXT,
+			query TEXT,
+			description TEXT DEFAULT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP DEFAULT NULL
+		);
+
+		CREATE TABLE IF NOT EXISTS database_connections (
+			id integer NOT NULL PRIMARY KEY,
+			username TEXT,
+			password TEXT,
+			host TEXT,
+			port TEXT,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP DEFAULT NULL
+		);
+	`
+	_, err := db.Exec(createTableSQL)
+
+	if err != nil {
+		log.Fatal(err)
+	}
 }

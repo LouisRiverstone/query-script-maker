@@ -66,9 +66,7 @@ const props = defineProps<{
 
 const value = ref(props.modelValue);
 
-const emit = defineEmits<{
-  'update:modelValue': (value: number) => void;
-}>();
+const emit = defineEmits(['update:modelValue']);
 
 const hasPrevious = computed(() => value.value > 0);
 const hasNext = computed(() => value.value < props.steps.length - 1 && !props.disableNextButton);

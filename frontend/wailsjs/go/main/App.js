@@ -6,10 +6,6 @@ export function CreateSQLFile(arg1) {
   return window['go']['main']['App']['CreateSQLFile'](arg1);
 }
 
-export function CreateSQLiteDatase(arg1) {
-  return window['go']['main']['App']['CreateSQLiteDatase'](arg1);
-}
-
 export function DeleteQuery(arg1) {
   return window['go']['main']['App']['DeleteQuery'](arg1);
 }
@@ -18,12 +14,8 @@ export function ExportDatabaseFile() {
   return window['go']['main']['App']['ExportDatabaseFile']();
 }
 
-export function GetQueries() {
-  return window['go']['main']['App']['GetQueries']();
-}
-
-export function Greet(arg1) {
-  return window['go']['main']['App']['Greet'](arg1);
+export function GetQueriesList(arg1) {
+  return window['go']['main']['App']['GetQueriesList'](arg1);
 }
 
 export function ImportDatabaseFile() {
@@ -34,8 +26,12 @@ export function InsertQueryInDatabase(arg1) {
   return window['go']['main']['App']['InsertQueryInDatabase'](arg1);
 }
 
-export function ReadFile() {
-  return window['go']['main']['App']['ReadFile']();
+export function MakeBindedSQL(arg1, arg2, arg3) {
+  return window['go']['main']['App']['MakeBindedSQL'](arg1, arg2, arg3);
+}
+
+export function ReadXLSXFile() {
+  return window['go']['main']['App']['ReadXLSXFile']();
 }
 
 export function UpdateQuery(arg1, arg2) {
