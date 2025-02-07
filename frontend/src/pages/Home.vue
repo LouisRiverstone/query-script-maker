@@ -17,16 +17,29 @@
                 </div>
             </section>
             <section v-show="step === 2">
-                <div v-if="hasEditor" class="flex flex-row justify-center">
-                    <Button type="button" @click="createSqlFile">Save .SQL</Button>
-                </div>
                 <div class="flex flex-col gap-3">
                     <div v-if="!loading" class="flex flex-col gap-5">
                         <Select label="Saved Queries" id="select-query" :options="querySelectOptions"
                             v-model="selectedQueryId" />
+                        <div v-if="!loadingDatabaseConnection && responseTest" class="text-black dark:">
+                            {{ responseTest }}
+                        </div>
                         <div v-if="hasVariablesAssigned" class="flex flex-row justify-center">
                             <Editor v-model="query" :show-binded-sql="true" :variables="variables" :data="content"
-                                ref="editorRef" />
+                                ref="editorRef">
+                                <div class="flex flex-row justify-end gap-3">
+                                    <div v-if="!loadingDatabaseConnection" class="flex flex-row gap-2 justify-end">
+                                        <Button v-if="databaseConnection.ID !== 0" type="button" class="w-full"
+                                            @click="testSQL">Test SQL</Button>
+                                    </div>
+                                    <div v-if="loadingDatabaseConnection">
+                                        <Loader />
+                                    </div>
+                                    <div v-if="hasEditor" class="flex flex-row justify-center">
+                                        <Button type="button" @click="createSqlFile">Save .SQL</Button>
+                                    </div>
+                                </div>
+                            </Editor>
                         </div>
                         <div v-else>
                             <Loader />
@@ -41,7 +54,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 
-import { ReadXLSXFile, CreateSQLFile, GetQueriesList } from '../../wailsjs/go/main/App'
+import { ReadXLSXFile, CreateSQLFile, GetQueriesList, GetDatabaseConnection, TestQueryInDatabase } from '../../wailsjs/go/main/App'
 import { main } from '../../wailsjs/go/models';
 
 import Table from '../components/Table.vue';
@@ -54,12 +67,24 @@ import Loader from '../components/Loader.vue';
 
 
 const loading = ref<boolean>(false);
+const loadingDatabaseConnection = ref<boolean>(false);
 const content = ref<{ [k: string]: string }[]>([]);
 const variblesCasterRef = ref<typeof VariablesCaster | null>(null);
 const editorRef = ref<typeof Editor | null>(null);
 const query = ref<string>('SELECT * FROM users where email = {{email}} and pode = {{pode}}');
-const selectedQueryId = ref<string>("")
+const selectedQueryId = ref<string>("TESTE")
 const queries = ref<Array<main.Query>>([])
+
+const databaseConnection = ref<main.DatabaseConnection>({
+    ID: 0,
+    Host: "",
+    Port: 0,
+    Username: "",
+    Password: "",
+    Database: ""
+});
+
+const responseTest = ref<string>("");
 
 const stepsHeaders = ref<string[]>(['Import .XLSX', 'Assign Variables', 'Save .SQL']);
 
@@ -126,10 +151,31 @@ const createSqlFile = async () => {
     await CreateSQLFile(sql);
 }
 
+const getDatabaseConnection = async () => {
+    try {
+        loadingDatabaseConnection.value = true
+        return await GetDatabaseConnection()
+    } catch (error) {
+        console.error(error)
+    } finally {
+        loadingDatabaseConnection.value = false
+    }
+}
+
+const testSQL = async () => {
+    try {
+        responseTest.value = null
+        responseTest.value = await TestQueryInDatabase(await editorRef.value!.getBindedSQL())
+    } catch (error) {
+        console.error(error)
+    }
+}
+
 const mount = async () => {
     try {
         loading.value = true
         queries.value = await GetQueriesList(false)
+        databaseConnection.value = await getDatabaseConnection()
     } catch (error) {
         console.error(error)
     } finally {

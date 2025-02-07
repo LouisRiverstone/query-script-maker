@@ -38,9 +38,6 @@
     </div>
 
     <div class="w-full flex flex-col gap-3">
-      <div class=" bg-gray-300 dark:bg-gray-700 px-5 py-3 rounded-md"> 
-        <slot></slot>
-      </div>
       <div class="flex flex-row sm:justify-end justify-between gap-3">
         <Button :disabled="!hasPrevious" type="button" @click="prevStep">
           Previous
@@ -49,6 +46,9 @@
         <Button :disabled="!hasNext" type="button" @click="nextStep">
           Next
         </button>
+      </div>
+      <div class=" bg-gray-300 dark:bg-gray-700 px-5 py-3 rounded-md"> 
+        <slot></slot>
       </div>
     </div>
   </div>

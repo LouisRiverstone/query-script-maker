@@ -5,12 +5,14 @@ go 1.21
 toolchain go1.23.4
 
 require (
+	github.com/go-sql-driver/mysql v1.8.1
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/wailsapp/wails/v2 v2.9.2
 	github.com/xuri/excelize/v2 v2.9.0
 )
 
 require (
+	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/bep/debounce v1.2.1 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect

@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 
+	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"github.com/xuri/excelize/v2"
@@ -35,6 +36,18 @@ type Query struct {
 	CreatedAt   *string
 	UpdatedAt   *string
 	DeletedAt   *string
+}
+
+type DatabaseConnection struct {
+	ID        *int
+	Username  string
+	Password  string
+	Host      string
+	Port      int
+	Database  string
+	CreatedAt *string
+	UpdatedAt *string
+	DeletedAt *string
 }
 
 // NewApp creates a new App application struct
@@ -256,7 +269,6 @@ func (a *App) GetQueriesList(withTrashed bool) ([]Query, error) {
 }
 
 func (a *App) DeleteQuery(id int) error {
-
 	db := openSqliteConnection()
 
 	defer db.Close()
@@ -298,6 +310,111 @@ func (a *App) UpdateQuery(id int, data Query) error {
 	}
 
 	return nil
+}
+
+func (a *App) GetDatabaseConnection() (DatabaseConnection, error) {
+	db := openSqliteConnection()
+
+	defer db.Close()
+
+	databaseConnectionQuery := `SELECT * FROM database_connections LIMIT 1`
+
+	rows, err := db.Query(databaseConnectionQuery)
+
+	if err != nil {
+		return DatabaseConnection{}, err
+	}
+
+	defer rows.Close()
+
+	var databaseConnection DatabaseConnection
+
+	for rows.Next() {
+		err = rows.Scan(&databaseConnection.ID, &databaseConnection.Username, &databaseConnection.Password, &databaseConnection.Host, &databaseConnection.Port, &databaseConnection.Database, &databaseConnection.CreatedAt, &databaseConnection.UpdatedAt, &databaseConnection.DeletedAt)
+
+		if err != nil {
+			return DatabaseConnection{}, err
+		}
+	}
+
+	err = rows.Err()
+
+	if err != nil {
+		return DatabaseConnection{}, err
+	}
+
+	return databaseConnection, nil
+}
+
+func (a *App) CreateOrUpdateDatabaseConnection(input DatabaseConnection) (DatabaseConnection, error) {
+	db := openSqliteConnection()
+
+	defer db.Close()
+
+	databaseConnectionQuery := `SELECT * FROM database_connections LIMIT 1`
+
+	rows, err := db.Query(databaseConnectionQuery)
+
+	if err != nil {
+		return DatabaseConnection{}, err
+	}
+
+	defer rows.Close()
+
+	var databaseConnection DatabaseConnection
+
+	for rows.Next() {
+		err = rows.Scan(&databaseConnection.ID, &databaseConnection.Username, &databaseConnection.Password, &databaseConnection.Host, &databaseConnection.Port, &databaseConnection.Database, &databaseConnection.CreatedAt, &databaseConnection.UpdatedAt, &databaseConnection.DeletedAt)
+
+		if err != nil {
+			return DatabaseConnection{}, err
+		}
+	}
+
+	err = rows.Err()
+
+	if err != nil {
+		return DatabaseConnection{}, err
+	}
+
+	if input.ID != nil {
+		updateQuery := `UPDATE database_connections SET username = ?, password = ?, database = ?, host = ?, port = ? WHERE id = ?`
+
+		stmt, err := db.Prepare(updateQuery)
+
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+
+		_, err = stmt.Exec(input.Username, input.Password, input.Database, input.Host, input.Port, *input.ID)
+
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+
+	} else {
+		insertQuery := `INSERT INTO database_connections(username, password, database, host, port) VALUES(?, ?, ?, ?, ?)`
+
+		stmt, err := db.Prepare(insertQuery)
+
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+
+		_, err = stmt.Exec(input.Username, input.Password, input.Database, input.Host, input.Port)
+
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+	}
+
+	databaseConnection.Username = input.Username
+	databaseConnection.Password = input.Password
+	databaseConnection.Host = input.Host
+	databaseConnection.Port = input.Port
+	databaseConnection.Database = input.Database
+
+	return databaseConnection, nil
 }
 
 func (a *App) ImportDatabaseFile() error {
@@ -372,6 +489,56 @@ func (a *App) ExportDatabaseFile() error {
 	return nil
 }
 
+func (a *App) TestQueryInDatabase(query string) (*sql.Rows, error) {
+	db := openSqliteConnection()
+
+	defer db.Close()
+
+	databaseConnectionQuery := `SELECT * FROM database_connections LIMIT 1`
+
+	rows, err := db.Query(databaseConnectionQuery)
+
+	if err != nil {
+		return &sql.Rows{}, err
+	}
+
+	defer rows.Close()
+
+	var databaseConnection DatabaseConnection
+
+	for rows.Next() {
+		err = rows.Scan(&databaseConnection.ID, &databaseConnection.Username, &databaseConnection.Password, &databaseConnection.Host, &databaseConnection.Port, &databaseConnection.Database, &databaseConnection.CreatedAt, &databaseConnection.UpdatedAt, &databaseConnection.DeletedAt)
+
+		if err != nil {
+			return &sql.Rows{}, err
+		}
+	}
+
+	err = rows.Err()
+
+	if err != nil {
+		return &sql.Rows{}, err
+	}
+
+	db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", databaseConnection.Username, databaseConnection.Password, databaseConnection.Host, databaseConnection.Port, databaseConnection.Database))
+
+	if err != nil {
+		return &sql.Rows{}, err
+	}
+
+	defer db.Close()
+
+	exec, err := db.Query(query)
+
+	if err != nil {
+		panic(err.Error())
+	}
+
+	defer exec.Close()
+
+	return exec, nil
+}
+
 func openSqliteConnection() *sql.DB {
 	db, err := sql.Open("sqlite3", "./database.db")
 
@@ -403,7 +570,8 @@ func createSqliteTables() {
 			username TEXT,
 			password TEXT,
 			host TEXT,
-			port TEXT,
+			port INTEGER,
+			database TEXT,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			deleted_at TIMESTAMP DEFAULT NULL
