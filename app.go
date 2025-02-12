@@ -489,54 +489,80 @@ func (a *App) ExportDatabaseFile() error {
 	return nil
 }
 
-func (a *App) TestQueryInDatabase(query string) (*sql.Rows, error) {
-	db := openSqliteConnection()
+func (a *App) TestQueryInDatabase(input DatabaseConnection, query string) ([]map[string]interface{}, error) {
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", input.Username, input.Password, input.Host, input.Port, input.Database))
+
+	if err != nil {
+		return nil, err
+	}
 
 	defer db.Close()
 
-	databaseConnectionQuery := `SELECT * FROM database_connections LIMIT 1`
-
-	rows, err := db.Query(databaseConnectionQuery)
+	rows, err := db.Query(query)
 
 	if err != nil {
-		return &sql.Rows{}, err
+		return nil, err
 	}
 
 	defer rows.Close()
 
-	var databaseConnection DatabaseConnection
+	columns, err := rows.Columns()
+
+	if err != nil {
+		return nil, err
+	}
+
+	var result []map[string]interface{}
 
 	for rows.Next() {
-		err = rows.Scan(&databaseConnection.ID, &databaseConnection.Username, &databaseConnection.Password, &databaseConnection.Host, &databaseConnection.Port, &databaseConnection.Database, &databaseConnection.CreatedAt, &databaseConnection.UpdatedAt, &databaseConnection.DeletedAt)
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+
+		for i := range columns {
+			valuePtrs[i] = &values[i]
+		}
+
+		err = rows.Scan(valuePtrs...)
 
 		if err != nil {
-			return &sql.Rows{}, err
+			return nil, err
 		}
+
+		row := make(map[string]interface{})
+
+		for i, col := range columns {
+			val := values[i]
+
+			switch v := val.(type) {
+			case []byte:
+				row[col] = string(v)
+			default:
+				row[col] = v
+			}
+		}
+
+		result = append(result, row)
 	}
 
-	err = rows.Err()
+	return result, nil
+}
+
+func (a *App) TestDatabaseConnection(input DatabaseConnection) bool {
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", input.Username, input.Password, input.Host, input.Port, input.Database))
 
 	if err != nil {
-		return &sql.Rows{}, err
-	}
-
-	db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", databaseConnection.Username, databaseConnection.Password, databaseConnection.Host, databaseConnection.Port, databaseConnection.Database))
-
-	if err != nil {
-		return &sql.Rows{}, err
+		return false
 	}
 
 	defer db.Close()
 
-	exec, err := db.Query(query)
+	err = db.Ping()
 
 	if err != nil {
-		panic(err.Error())
+		return false
 	}
 
-	defer exec.Close()
-
-	return exec, nil
+	return true
 }
 
 func openSqliteConnection() *sql.DB {

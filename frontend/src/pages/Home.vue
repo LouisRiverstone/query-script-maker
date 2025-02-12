@@ -21,16 +21,15 @@
                     <div v-if="!loading" class="flex flex-col gap-5">
                         <Select label="Saved Queries" id="select-query" :options="querySelectOptions"
                             v-model="selectedQueryId" />
-                        <div v-if="!loadingDatabaseConnection && responseTest" class="text-black dark:">
-                            {{ responseTest }}
-                        </div>
                         <div v-if="hasVariablesAssigned" class="flex flex-row justify-center">
                             <Editor v-model="query" :show-binded-sql="true" :variables="variables" :data="content"
                                 ref="editorRef">
-                                <div class="flex flex-row justify-end gap-3">
-                                    <div v-if="!loadingDatabaseConnection" class="flex flex-row gap-2 justify-end">
-                                        <Button v-if="databaseConnection.ID !== 0" type="button" class="w-full"
-                                            @click="testSQL">Test SQL</Button>
+                                <div class="flex flex-row justify-end gap-3 w-full">
+                                    <div v-if="!loadingDatabaseConnection" class="flex flex-row gap-3 justify-end">
+                                        <Button v-if="databaseConnection && databaseConnection.ID !== 0" type="button"
+                                            @click="testInputSql">Test Input SQL</Button>
+                                        <Button v-if="databaseConnection && databaseConnection.ID !== 0" type="button"
+                                          @click="testOutputSql">Test Output SQL</Button>
                                     </div>
                                     <div v-if="loadingDatabaseConnection">
                                         <Loader />
@@ -48,6 +47,7 @@
                 </div>
             </section>
         </Steps>
+        <SqlResultTable :data="responseTest" v-model="showSqlTable" />
     </div>
 </template>
 
@@ -64,18 +64,20 @@ import Steps from '../components/Steps.vue';
 import Button from '../components/Button.vue';
 import Select from '../components/Select.vue';
 import Loader from '../components/Loader.vue';
-
+import SqlResultTable from '../components/SqlResultTable.vue';
 
 const loading = ref<boolean>(false);
 const loadingDatabaseConnection = ref<boolean>(false);
 const content = ref<{ [k: string]: string }[]>([]);
 const variblesCasterRef = ref<typeof VariablesCaster | null>(null);
 const editorRef = ref<typeof Editor | null>(null);
-const query = ref<string>('SELECT * FROM users where email = {{email}} and pode = {{pode}}');
+const query = ref<string>('SELECT * from family limit 1;');
+const showSqlTable = ref<boolean>(false);
+
 const selectedQueryId = ref<string>("TESTE")
 const queries = ref<Array<main.Query>>([])
 
-const databaseConnection = ref<main.DatabaseConnection>({
+const databaseConnection = ref<main.DatabaseConnection | undefined>({
     ID: 0,
     Host: "",
     Port: 0,
@@ -84,7 +86,7 @@ const databaseConnection = ref<main.DatabaseConnection>({
     Database: ""
 });
 
-const responseTest = ref<string>("");
+const responseTest = ref<{ [k: string]: any }[]>([]);
 
 const stepsHeaders = ref<string[]>(['Import .XLSX', 'Assign Variables', 'Save .SQL']);
 
@@ -162,12 +164,38 @@ const getDatabaseConnection = async () => {
     }
 }
 
-const testSQL = async () => {
+const testInputSql = async () => {
     try {
-        responseTest.value = null
-        responseTest.value = await TestQueryInDatabase(await editorRef.value!.getBindedSQL())
+        await testSQL(query.value)
     } catch (error) {
-        console.error(error)
+        alert(error)
+    }
+}
+
+const testOutputSql = async () => {
+    try {
+        if (!hasEditor.value) {
+            return;
+        }
+
+        await testSQL(editorRef.value!.getBindedSQL())
+    } catch (error) {
+        alert(error)
+    }
+}
+
+const testSQL = async (query: string) => {
+    try {
+        if (!databaseConnection.value) {
+            alert("Database connection not found")
+        }
+
+        responseTest.value = []
+        responseTest.value = (await TestQueryInDatabase(databaseConnection.value!, query))
+
+        showSqlTable.value = true
+    } catch (error) {
+        throw error
     }
 }
 

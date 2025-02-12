@@ -23,7 +23,6 @@ import { MakeBindedSQL } from '../../wailsjs/go/main/App';
 import { main } from '../../wailsjs/go/models';
 import { computedAsync } from '@vueuse/core';
 
-import Button from './Button.vue';
 import Divider from './Divider.vue';
 
 const props = defineProps<{
@@ -56,10 +55,6 @@ const getBindedSQL = async (): Promise<string> => {
 
     return await MakeBindedSQL(value.value, props.data!, props.variables!);
 }
-
-onMounted(() => {
-    getDatabaseConnection();
-});
 
 watch(() => props.modelValue, (newValue) => {
     value.value = newValue;

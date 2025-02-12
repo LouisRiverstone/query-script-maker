@@ -57,17 +57,19 @@
                         <Input id="database-port" type="number" v-model="databaseConnection.Port" label="Port" />
                     </div>
                     <div class="flex md:flex-row flex-col gap-5">
-                        <Input id="database-database" type="text" v-model="databaseConnection.Database" label="Database" />
+                        <Input id="database-database" type="text" v-model="databaseConnection.Database"
+                            label="Database" />
                     </div>
                     <div class="flex md:flex-row flex-col gap-5">
-                        <Input id="database-username" type="text" v-model="databaseConnection.Username" label="Username" />
-                        <Input id="database-password" type="password" v-model="databaseConnection.Password" label="Password" />
+                        <Input id="database-username" type="text" v-model="databaseConnection.Username"
+                            label="Username" />
+                        <Input id="database-password" type="password" v-model="databaseConnection.Password"
+                            label="Password" />
                     </div>
                 </div>
-                <div class="flex flex-row gap-2 justify-end">
-                    <div>
-                        <Button type="button" class="w-full" @click="() => showSaveDatabaseConnection = true">SAVE CONNECTION</Button>
-                    </div>
+                <div class="flex flex-row justify-end gap-2">
+                    <Button type="button" :disabled="testingConnection" @click="testDatabaseConnection">TEST CONNECTION</Button>
+                    <Button type="button" @click="() => showSaveDatabaseConnection = true">SAVE CONNECTION</Button>
                 </div>
             </div>
             <div v-else>
@@ -94,7 +96,7 @@ import Editor from '../components/Editor.vue';
 import Input from '../components/Input.vue';
 import ConfirmationModal from '../components/ConfirmationModal.vue';
 
-import { ImportDatabaseFile, ExportDatabaseFile, GetQueriesList, InsertQueryInDatabase, UpdateQuery, DeleteQuery, CreateOrUpdateDatabaseConnection , GetDatabaseConnection} from '../../wailsjs/go/main/App'
+import { ImportDatabaseFile, ExportDatabaseFile, GetQueriesList, InsertQueryInDatabase, UpdateQuery, DeleteQuery, CreateOrUpdateDatabaseConnection, GetDatabaseConnection, TestDatabaseConnection } from '../../wailsjs/go/main/App'
 import { main } from '../../wailsjs/go/models';
 
 const queries = ref<Array<main.Query>>([])
@@ -121,6 +123,7 @@ const showDeleteQueryModal = ref<boolean>(false)
 const showSaveQueryModal = ref<boolean>(false)
 const showSaveDatabaseConnection = ref<boolean>(false)
 const loadingDatabaseConnection = ref<boolean>(false)
+const testingConnection = ref<boolean>(false)
 
 const mapQueriesForSelect = (queries: Array<main.Query>) => {
     return queries.map((query) => {
@@ -241,6 +244,26 @@ const saveDatabaseConnection = async () => {
         console.error(error)
     } finally {
         loadingDatabaseConnection.value = false
+    }
+}
+
+const testDatabaseConnection = async () => {
+    try {
+        testingConnection.value = true
+
+        const successful = await TestDatabaseConnection(databaseConnection.value)
+
+        if (successful) {
+            alert("Connection successful")
+
+            return;
+        }
+
+        alert("Connection failed")
+    } catch (error) {
+        console.error(error)
+    } finally {
+        testingConnection.value = false
     }
 }
 

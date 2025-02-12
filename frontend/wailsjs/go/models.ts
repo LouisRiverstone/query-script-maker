@@ -71,20 +71,3 @@ export namespace main {
 
 }
 
-export namespace sql {
-	
-	export class Rows {
-	
-	
-	    static createFrom(source: any = {}) {
-	        return new Rows(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	
-	    }
-	}
-
-}
-
