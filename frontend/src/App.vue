@@ -19,6 +19,8 @@ import { onMounted } from 'vue';
 const checkForUpdate = async () => {
   const hasUpdate = await CheckHasUpdate()
 
+  alert(hasUpdate)
+
   if (!hasUpdate) {
     return;
   }

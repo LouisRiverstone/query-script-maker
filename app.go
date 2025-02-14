@@ -654,9 +654,5 @@ func (a *App) CheckHasUpdate() bool {
 
 	latestVersion := versionData["version"].(string)
 
-	if latestVersion > version {
-		return true
-	}
-
-	return false
+	return latestVersion > version
 }
