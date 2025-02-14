@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"regexp"
 	"strings"
@@ -608,4 +609,54 @@ func createSqliteTables() {
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func (a *App) GetBuildParams() map[string]interface{} {
+	file, err := os.Open("build_params.json")
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer file.Close()
+
+	var buildParams map[string]interface{}
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&buildParams)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return buildParams
+}
+
+func (a *App) CheckHasUpdate() bool {
+	buildParams := a.GetBuildParams()
+
+	if buildParams["version"] == nil {
+		return false
+	}
+
+	version := buildParams["version"].(string)
+
+	resp, err := http.Get("https://raw.githubusercontent.com/LouisRiverstone/query-script-maker/refs/heads/master/build_params.json")
+
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	var versionData map[string]interface{}
+	err = json.NewDecoder(resp.Body).Decode(&versionData)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	latestVersion := versionData["version"].(string)
+
+	if latestVersion > version {
+		return true
+	}
+
+	return false
 }

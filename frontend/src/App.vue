@@ -11,6 +11,27 @@
 <script lang="ts" setup>
 import Header from './components/Header.vue';
 import Footer from './components/Footer.vue';
+
+import { CheckHasUpdate } from '../wailsjs/go/main/App'
+import { onMounted } from 'vue';
+
+
+const checkForUpdate = async () => {
+  const hasUpdate = await CheckHasUpdate()
+
+  if (!hasUpdate) {
+    return;
+  }
+
+
+  const update = confirm("There is a new version available. Do you want to update?");
+
+}
+
+onMounted(() => {
+  checkForUpdate()
+});
+
 </script>
 
 <style scoped>
