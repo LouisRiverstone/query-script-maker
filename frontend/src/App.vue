@@ -5,6 +5,7 @@
             <router-view />
         </transition>
         <Footer />
+        <Alert v-model="showVersionModal" title="New version available" message="A new version is available. Access the repository to download it." />
     </main>
 </template>
 
@@ -13,21 +14,13 @@ import Header from './components/Header.vue';
 import Footer from './components/Footer.vue';
 
 import { CheckHasUpdate } from '../wailsjs/go/main/App'
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
+import Alert from './components/Alert.vue';
 
+const showVersionModal = ref<boolean>(false)
 
 const checkForUpdate = async () => {
-  const hasUpdate = await CheckHasUpdate()
-
-  alert(hasUpdate)
-
-  if (!hasUpdate) {
-    return;
-  }
-
-
-  const update = confirm("There is a new version available. Do you want to update?");
-
+  showVersionModal.value = await CheckHasUpdate()
 }
 
 onMounted(() => {

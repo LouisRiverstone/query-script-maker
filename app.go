@@ -649,7 +649,7 @@ func (a *App) CheckHasUpdate() bool {
 	var versionData map[string]interface{}
 	err = json.NewDecoder(resp.Body).Decode(&versionData)
 	if err != nil {
-		log.Fatal(err)
+		return false
 	}
 
 	latestVersion := versionData["version"].(string)
