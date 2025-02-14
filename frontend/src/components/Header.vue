@@ -1,6 +1,6 @@
 <template>
-    <header class="bg-white dark:bg-gray-900">
-        <div class="mx-auto flex h-16 max-w-screen-xl items-center gap-8 px-4 sm:px-6 lg:px-8">
+    <header class="bg-gray-100 dark:bg-gray-900">
+        <div class="mx-auto flex  flex-col sm:flex-row p-5 max-w-screen-xl items-center gap-8 px-4 sm:px-6 lg:px-8">
             <router-link to="/" class="block text-indigo-600 dark:text-indigo-300">
                 <span class="sr-only">Home</span>
                 <svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:svgjs="http://svgjs.dev/svgjs" width="32" height="32" viewBox="0 0 132 132" style="background-color: rgba(79, 57, 246, 00);"><svg viewBox="0 0 163.01300048828125 139" width="110.00000000000001" height="110.00000000000001" style="fill: rgb(255, 255, 255);" x="10.999999999999993" y="10.999999999999993"><svg width="163" height="134" viewBox="0 0 163 134" xmlns="http://www.w3.org/2000/svg">
@@ -21,9 +21,9 @@
             </router-link>
 
 
-            <div class="flex flex-1 items-center justify-end md:justify-between">
-                <nav aria-label="Global" class="hidden md:block">
-                    <ul class="flex items-center gap-6 text-sm">
+            <div class="flex flex-1 items-center sm:justify-between justify-center">
+                <nav aria-label="Global">
+                    <ul class="flex items-center gap-6 text-sm sm:flex-row flex-col">
                         <li>
                             <router-link to="/"
                                 class="text-gray-500 transition hover:text-gray-500/75 dark:text-white dark:hover:text-white/75">
@@ -41,17 +41,6 @@
                         </li>
                     </ul>
                 </nav>
-
-                <div class="flex items-center gap-4">
-                    <button
-                        class="block rounded-sm bg-gray-100 p-2.5 text-gray-600 transition hover:text-gray-600/75 md:hidden dark:bg-gray-800 dark:text-white dark:hover:text-white/75">
-                        <span class="sr-only">Toggle menu</span>
-                        <svg xmlns="http://www.w3.org/2000/svg" class="size-5" fill="none" viewBox="0 0 24 24"
-                            stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                        </svg>
-                    </button>
-                </div>
             </div>
         </div>
     </header>
