@@ -39,5 +39,6 @@ jobs:
         with:
           build-name: ${{ matrix.build.name }}
           build-platform: ${{ matrix.build.platform }}
-          package: false
+          build-obfuscate: true
+          package: true
           go-version: '1.23.5'
