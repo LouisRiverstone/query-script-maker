@@ -16,15 +16,15 @@ jobs:
       fail-fast: false
       matrix:
         build:
-          - name: 'App'
+          - name: 'SQL Script Maker'
             platform:  'linux/amd64'
             os: 'ubuntu-latest'
-          - name: 'App'
+          - name: 'SQL Script Maker'
             platform:  'windows/amd64'
             os: 'windows-latest'
-          - name: 'App'
-            platform:  'darwin/universal'
-            os: 'macos-latest'
+          # - name: 'SQL Script Maker'
+          #   platform:  'darwin/universal'
+          #   os: 'macos-latest'
 
     runs-on: ${{ matrix.build.os }}
     steps:
