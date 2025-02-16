@@ -29,7 +29,10 @@ ENV PATH=$PATH:/usr/local/go/bin
 ENV GOPATH=/usr/local/go
 
 # install wails
-RUN go install github.com/wailsapp/wails/v2/cmd/wails@latest
+RUN go install github.com/wailsapp/wails/v2/cmd/wails@2.10
+
+# Update wails
+RUN wails update
 
 # install delve
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
