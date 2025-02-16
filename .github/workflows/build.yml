@@ -16,13 +16,13 @@ jobs:
       fail-fast: false
       matrix:
         build:
-          - name: 'SQL Script Maker'
+          - name: 'App'
             platform:  'linux/amd64'
             os: 'ubuntu-latest'
-          - name: 'SQL Script Maker'
+          - name: 'App'
             platform:  'windows/amd64'
             os: 'windows-latest'
-          # - name: 'SQL Script Maker'
+          # - name: 'App'
           #   platform:  'darwin/universal'
           #   os: 'macos-latest'
 
@@ -34,7 +34,7 @@ jobs:
           submodules: recursive
 
       - name: Build wails
-        uses: dAppServer/wails-build-action@main
+        uses: dAppServer/wails-build-action@v2
         id: build
         with:
           build-name: ${{ matrix.build.name }}
