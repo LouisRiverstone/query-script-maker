@@ -1,23 +1,65 @@
-# Vue 3 + TypeScript + Vite
+# SQL Script Maker
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue
-3 `<script setup>` SFCs, check out
-the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+<div align="center">
+  <img src="https://raw.githubusercontent.com/LouisRiverstone/query-script-maker/refs/heads/master/frontend/src/assets/logo/default_765x625.png" alt="SQL Script Maker Logo" />
+</div>
 
-## Recommended IDE Setup
+## Overview
 
-- [VS Code](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar)
+SQL Script Maker is a powerful and user-friendly tool designed to help you create, manage, and execute SQL scripts effortlessly. It provides functionality to read Excel files (`.xlsx`), bind variables, write SQL queries in an intuitive editor, save your favorite queries in a local SQLite database, and test your queries against a MySQL database.
 
-## Type Support For `.vue` Imports in TS
+Whether you're a beginner or an experienced developer, this software simplifies your SQL query-building process, allowing you to focus more on solving problems than worrying about syntax.
 
-Since TypeScript cannot handle type information for `.vue` imports, they are shimmed to be a generic Vue component type
-by default. In most cases this is fine if you don't really care about component prop types outside of templates.
-However, if you wish to get actual prop types in `.vue` imports (for example to get props validation when using
-manual `h(...)` calls), you can enable Volar's Take Over mode by following these steps:
+---
 
-1. Run `Extensions: Show Built-in Extensions` from VS Code's command palette, look
-   for `TypeScript and JavaScript Language Features`, then right click and select `Disable (Workspace)`. By default,
-   Take Over mode will enable itself if the default TypeScript extension is disabled.
-2. Reload the VS Code window by running `Developer: Reload Window` from the command palette.
+## Features
 
-You can learn more about Take Over mode [here](https://github.com/johnsoncodehk/volar/discussions/471).
+### 1. **Read Excel (`.xlsx`) Files**
+   - Import Excel files directly into the application.
+   - Automatically parse the data into SQL-friendly formats.
+   - Extract relevant data from your spreadsheets for use in SQL queries.
+
+### 2. **Bind Variables for Queries**
+   - Easily bind variables to SQL queries.
+   - Save time and reduce errors by using dynamic variables for repeated queries.
+   - Supports both static and user-defined variables.
+
+### 3. **SQL Editor**
+   - An integrated SQL editor that provides syntax highlighting and basic code completion.
+   - Includes error detection to help debug your queries.
+   - Option to execute queries directly against a MySQL database.
+
+### 4. **Local SQLite Database for Favorite Queries**
+   - Save your frequently-used SQL queries locally in a built-in SQLite database.
+   - Quickly access and reuse saved queries to streamline your workflow.
+
+### 5. **Test Queries Against MySQL Database**
+   - Connect to your MySQL database and test SQL queries in real-time.
+   - Direct execution of queries with results shown in the app.
+   - Easily configure connection settings and manage database profile.
+
+---
+
+## Installation
+
+1. Download the installer in releases.
+2. Run in your favorite OS.
+
+---
+
+## System Requirements
+
+- **Operating System:** Windows 11 / macOS 10.13+ / Linux
+- **RAM:** 512 MB minimum (1 GB recommended)
+- **Disk Space:** 50 MB free space for installation
+- **Database:** MySQL 5.7+ (for testing queries)
+
+---
+
+## License
+
+SQL Script Maker is available under the MIT license. You can use the software for personal or commercial purposes as outlined in the full license documentation.
+
+---
+
+Enjoy crafting your SQL queries with ease!
