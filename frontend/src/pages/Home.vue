@@ -57,7 +57,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 
-import { ReadXLSXFile, CreateSQLFile, GetQueriesList, GetDatabaseConnection, TestQueryInDatabase, TestBatchQueryInDatabase } from '../../wailsjs/go/main/App'
+import { ReadXLSXFile, CreateSQLFile, GetQueriesList, GetDatabaseConnection, TestQueryInDatabase, TestBatchQueryInDatabase, MakeBindedSQL } from '../../wailsjs/go/main/App'
 import { main } from '../../wailsjs/go/models';
 
 import Table from '../components/Table.vue';
@@ -179,7 +179,10 @@ const getDatabaseConnection = async () => {
 
 const testInputSql = async () => {
     try {
-        await testSQL(query.value)
+        const firstContent = content.value[0]
+        const bindedSql = await MakeBindedSQL(query.value, [firstContent], variables.value)
+    
+        await testSQL(bindedSql)
     } catch (error) {
         alert(error)
     }
@@ -190,7 +193,7 @@ const testOutputSql = async () => {
         if (!hasEditor.value) {
             return;
         }
-
+        
         await testBatchSQL(await editorRef.value!.getBindedSQL())
     } catch (error) {
         alert(error)
