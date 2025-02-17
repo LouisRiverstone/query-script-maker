@@ -7,7 +7,7 @@ env:
   NODE_OPTIONS: "--max-old-space-size=4096"
 
 jobs:
-  ubuntu-obfuscate:
+  ubuntu-latest:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,48 +19,51 @@ jobs:
           build-platform: linux/amd64
           wails-build-webview2: "embed"
           build-obfuscate: true
+          go-version: '1.23.5'
           package: true
-  macos15arm64:
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: dAppServer/wails-build-action@main
-        with:
-          build-name: sql-script-maker-macos15arm64
-          build-platform: darwin/universal
-          sign: "false"
-          sign-macos-apple-password: ${{ secrets.APPLE_PASSWORD }}
-          sign-macos-app-id: "Developer ID Application: Lethean LTD (W2DNA5L5DY)"
-          sign-macos-app-cert: ${{ secrets.MAC_DEVELOPER_CERT }}
-          sign-macos-app-cert-password: ${{ secrets.MAC_DEVELOPER_PASS }}
-          sign-macos-installer-id: "Developer ID Installer: Lethean LTD (W2DNA5L5DY)"
-          sign-macos-installer-cert: ${{ secrets.MAC_DEVELOPER_INSTALL_CERT }}
-          sign-macos-installer-cert-password: ${{ secrets.MAC_DEVELOPER_INSTALL_PASS }}
-          build-obfuscate: true
-          package: true
-  macos13amd64:
-    runs-on: macos-13
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: dAppServer/wails-build-action@main
-        with:
-          build-name: wails
-          build-platform: darwin/universal
-          sign: "false"
-          sign-macos-apple-password: ${{ secrets.APPLE_PASSWORD }}
-          sign-macos-app-id: "Developer ID Application: Lethean LTD (W2DNA5L5DY)"
-          sign-macos-app-cert: ${{ secrets.MAC_DEVELOPER_CERT }}
-          sign-macos-app-cert-password: ${{ secrets.MAC_DEVELOPER_PASS }}
-          sign-macos-installer-id: "Developer ID Installer: Lethean LTD (W2DNA5L5DY)"
-          sign-macos-installer-cert: ${{ secrets.MAC_DEVELOPER_INSTALL_CERT }}
-          sign-macos-installer-cert-password: ${{ secrets.MAC_DEVELOPER_INSTALL_PASS }}
-          build-obfuscate: true
-          package: true
-  windows-nsis:
+  # macos-latest-arm64:
+  #   runs-on: macos-15
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         submodules: recursive
+  #     - uses: dAppServer/wails-build-action@main
+  #       with:
+  #         build-name: sql-script-maker-macos15arm64
+  #         build-platform: darwin/universal
+  #         sign: "false"
+  #         sign-macos-apple-password: ${{ secrets.APPLE_PASSWORD }}
+  #         sign-macos-app-id: "Developer ID Application: Lethean LTD (W2DNA5L5DY)"
+  #         sign-macos-app-cert: ${{ secrets.MAC_DEVELOPER_CERT }}
+  #         sign-macos-app-cert-password: ${{ secrets.MAC_DEVELOPER_PASS }}
+  #         sign-macos-installer-id: "Developer ID Installer: Lethean LTD (W2DNA5L5DY)"
+  #         sign-macos-installer-cert: ${{ secrets.MAC_DEVELOPER_INSTALL_CERT }}
+  #         sign-macos-installer-cert-password: ${{ secrets.MAC_DEVELOPER_INSTALL_PASS }}
+  #         build-obfuscate: true
+  #         go-version: '1.23.5'
+  #         package: true
+  # macos-13-amd64:
+  #   runs-on: macos-13
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         submodules: recursive
+  #     - uses: dAppServer/wails-build-action@main
+  #       with:
+  #         build-name: wails
+  #         build-platform: darwin/universal
+  #         sign: "false"
+  #         sign-macos-apple-password: ${{ secrets.APPLE_PASSWORD }}
+  #         sign-macos-app-id: "Developer ID Application: Lethean LTD (W2DNA5L5DY)"
+  #         sign-macos-app-cert: ${{ secrets.MAC_DEVELOPER_CERT }}
+  #         sign-macos-app-cert-password: ${{ secrets.MAC_DEVELOPER_PASS }}
+  #         sign-macos-installer-id: "Developer ID Installer: Lethean LTD (W2DNA5L5DY)"
+  #         sign-macos-installer-cert: ${{ secrets.MAC_DEVELOPER_INSTALL_CERT }}
+  #         sign-macos-installer-cert-password: ${{ secrets.MAC_DEVELOPER_INSTALL_PASS }}
+  #         build-obfuscate: true
+  #         go-version: '1.23.5'
+  #         package: true
+  windows-2022:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
@@ -73,31 +76,5 @@ jobs:
           wails-build-webview2: "embed"
           nsis: "true"
           build-obfuscate: true
-          package: false # Do not try to upload to github
-  # build:
-  #   strategy:
-  #   # Failure in one platform build won't impact the others
-  #     fail-fast: false
-  #     matrix:
-  #       build: [
-  #         {name: sql-script-maker, platform: linux/amd64, os: ubuntu-latest},
-  #         {name: sql-script-maker, platform: windows/amd64, os: windows-latest},
-  #         {name: sql-script-maker, platform: darwin/universal, os: macos-latest}
-  #       ]
-  #   runs-on: ${{ matrix.build.os }}
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v2
-  #       with:
-  #         submodules: recursive
-
-  #     - name: Build wails
-  #       uses: dAppServer/wails-build-action@main
-  #       id: build
-  #       with:
-  #         build-name: ${{ matrix.build.name }}
-  #         build-platform: ${{ matrix.build.platform }}
-  #         build-obfuscate: true
-  #         package: true
-  #         nsis: true
-  #         go-version: '1.23.5'
+          go-version: '1.23.5'
+          package: true # Do not try to upload to github
