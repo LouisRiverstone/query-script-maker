@@ -26,6 +26,8 @@ export function MakeBindedSQL(arg1:string,arg2:Array<Record<string, any>>,arg3:A
 
 export function ReadXLSXFile():Promise<string>;
 
+export function TestBatchQueryInDatabase(arg1:main.DatabaseConnection,arg2:Array<string>):Promise<Array<any>>;
+
 export function TestDatabaseConnection(arg1:main.DatabaseConnection):Promise<boolean>;
 
 export function TestQueryInDatabase(arg1:main.DatabaseConnection,arg2:string):Promise<Array<Record<string, any>>>;

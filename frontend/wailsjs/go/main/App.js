@@ -50,6 +50,10 @@ export function ReadXLSXFile() {
   return window['go']['main']['App']['ReadXLSXFile']();
 }
 
+export function TestBatchQueryInDatabase(arg1, arg2) {
+  return window['go']['main']['App']['TestBatchQueryInDatabase'](arg1, arg2);
+}
+
 export function TestDatabaseConnection(arg1) {
   return window['go']['main']['App']['TestDatabaseConnection'](arg1);
 }

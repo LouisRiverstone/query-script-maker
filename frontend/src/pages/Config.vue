@@ -22,7 +22,7 @@
             <div v-if="!loadingQueries" class="flex flex-col gap-5">
                 <div class="flex flex-row gap-5 items-end">
                     <div class="flex flex-grow w-full flex-col">
-                        <Select label="Queries" id="select-query" :options="mapQueriesForSelect(queries)"
+                        <Dropdown label="Queries" id="select-query" :options="mapQueriesForSelect(queries)"
                             v-model="selectedQueryId" />
                     </div>
                     <Button type="button" @click="resetQuery">NEW QUERY</Button>
@@ -90,11 +90,12 @@ import { onMounted, ref, watch } from 'vue'
 
 import Divider from '../components/Divider.vue'
 import Button from '../components/Button.vue';
-import Select from '../components/Select.vue';
 import Loader from '../components/Loader.vue';
 import Editor from '../components/Editor.vue';
 import Input from '../components/Input.vue';
+import Dropdown from '../components/Dropdown.vue';
 import ConfirmationModal from '../components/ConfirmationModal.vue';
+
 
 import { ImportDatabaseFile, ExportDatabaseFile, GetQueriesList, InsertQueryInDatabase, UpdateQuery, DeleteQuery, CreateOrUpdateDatabaseConnection, GetDatabaseConnection, TestDatabaseConnection } from '../../wailsjs/go/main/App'
 import { main } from '../../wailsjs/go/models';

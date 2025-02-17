@@ -19,8 +19,11 @@
             <section v-show="step === 2">
                 <div class="flex flex-col gap-3">
                     <div v-if="!loading" class="flex flex-col gap-5">
-                        <Select label="Saved Queries" id="select-query" :options="querySelectOptions"
+                        <Dropdown label="Saved Queries" id="select-query" :options="querySelectOptions"
                             v-model="selectedQueryId" />
+                        <div v-if="selectedQueryDescription">
+                            <small>Query Description: {{ selectedQueryDescription }}</small>
+                        </div>
                         <div v-if="hasVariablesAssigned" class="flex flex-row justify-center">
                             <Editor v-model="query" :show-binded-sql="true" :variables="variables" :data="content"
                                 ref="editorRef">
@@ -54,7 +57,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 
-import { ReadXLSXFile, CreateSQLFile, GetQueriesList, GetDatabaseConnection, TestQueryInDatabase } from '../../wailsjs/go/main/App'
+import { ReadXLSXFile, CreateSQLFile, GetQueriesList, GetDatabaseConnection, TestQueryInDatabase, TestBatchQueryInDatabase } from '../../wailsjs/go/main/App'
 import { main } from '../../wailsjs/go/models';
 
 import Table from '../components/Table.vue';
@@ -62,7 +65,7 @@ import VariablesCaster from '../components/VariablesCaster.vue';
 import Editor from '../components/Editor.vue';
 import Steps from '../components/Steps.vue';
 import Button from '../components/Button.vue';
-import Select from '../components/Select.vue';
+import Dropdown from '../components/Dropdown.vue';
 import Loader from '../components/Loader.vue';
 import SqlResultTable from '../components/SqlResultTable.vue';
 
@@ -86,7 +89,7 @@ const databaseConnection = ref<main.DatabaseConnection | undefined>({
     Database: ""
 });
 
-const responseTest = ref<{ [k: string]: any }[]>([]);
+const responseTest = ref<{ [k: string]: any }[][]>([]);
 
 const stepsHeaders = ref<string[]>(['Import .XLSX', 'Assign Variables', 'Save .SQL']);
 
@@ -128,6 +131,16 @@ const variables = computed(() => {
     }
 
     return variblesCasterRef.value.variables;
+})
+
+const selectedQueryDescription = computed(() => { 
+    const querySelected = queries.value.find((query) => query.ID === Number (selectedQueryId.value));
+
+    if (!querySelected) {
+        return;
+    }
+
+    return querySelected.Description;
 })
 
 const querySelectOptions = computed(() => {
@@ -178,7 +191,7 @@ const testOutputSql = async () => {
             return;
         }
 
-        await testSQL(editorRef.value!.getBindedSQL())
+        await testBatchSQL(await editorRef.value!.getBindedSQL())
     } catch (error) {
         alert(error)
     }
@@ -191,7 +204,24 @@ const testSQL = async (query: string) => {
         }
 
         responseTest.value = []
-        responseTest.value = (await TestQueryInDatabase(databaseConnection.value!, query))
+        responseTest.value = [(await TestQueryInDatabase(databaseConnection.value!, query))]
+
+        showSqlTable.value = true
+    } catch (error) {
+        throw error
+    }
+}
+
+const testBatchSQL = async (query: string) => {
+    try {
+        if (!databaseConnection.value) {
+            alert("Database connection not found")
+        }
+        
+        const queries = query.replaceAll("\n", "").split(';').filter((query) => query.trim() !== '').map((query) => `${query};`);
+
+        responseTest.value = []
+        responseTest.value = (await TestBatchQueryInDatabase(databaseConnection.value!, queries))
 
         showSqlTable.value = true
     } catch (error) {

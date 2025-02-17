@@ -548,6 +548,20 @@ func (a *App) TestQueryInDatabase(input DatabaseConnection, query string) ([]map
 	return result, nil
 }
 
+func (a *App) TestBatchQueryInDatabase(input DatabaseConnection, queries []string) ([][]map[string]interface{}, error) {
+	var results [][]map[string]interface{}
+
+	for _, query := range queries {
+		rows, err := a.TestQueryInDatabase(input, query)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, rows)
+	}
+
+	return results, nil
+}
+
 func (a *App) TestDatabaseConnection(input DatabaseConnection) bool {
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", input.Username, input.Password, input.Host, input.Port, input.Database))
 
