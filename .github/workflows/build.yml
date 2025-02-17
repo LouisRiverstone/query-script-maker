@@ -17,7 +17,6 @@ jobs:
         with:
           build-name: sql-script-maker-ubuntu
           build-platform: linux/amd64
-          wails-build-webview2: "embed"
           build-obfuscate: true
           go-version: '1.23.5'
           package: true
@@ -73,7 +72,6 @@ jobs:
         with:
           build-name: sql-script-maker-windows-64.exe
           build-platform: windows/amd64
-          wails-build-webview2: "embed"
           nsis: "true"
           build-obfuscate: true
           go-version: '1.23.5'
