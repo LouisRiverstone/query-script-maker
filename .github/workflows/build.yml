@@ -71,7 +71,7 @@ jobs:
           submodules: recursive
       - uses: dAppServer/wails-build-action@main
         with:
-          build-name: wails.exe
+          build-name: sql-script-maker-windows-64.exe
           build-platform: windows/amd64
           wails-build-webview2: "embed"
           nsis: "true"
