@@ -612,20 +612,9 @@ func createSqliteTables() {
 }
 
 func (a *App) GetBuildParams() map[string]interface{} {
-	file, err := os.Open("build_params.json")
+	buildParams := make(map[string]interface{})
 
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	defer file.Close()
-
-	var buildParams map[string]interface{}
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(&buildParams)
-	if err != nil {
-		log.Fatal(err)
-	}
+	buildParams["version"] = "0.0.1"
 
 	return buildParams
 }
