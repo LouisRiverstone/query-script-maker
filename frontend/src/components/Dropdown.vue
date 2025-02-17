@@ -16,11 +16,11 @@
                     </svg>
                 </span>
             </button>
-            <div v-if="isOpen" class="absolute mt-1 w-full rounded-md bg-white shadow-lg z-10">
+            <div v-if="isOpen" class="absolute mt-1 w-full rounded-md bg-white dark:bg-gray-600 shadow-2xl z-10 border border-gray-300 dark:border-gray-700">
                 <ul tabindex="-1" role="listbox"
-                    class="max-h-60 rounded-md py-1 text-base overflow-auto focus:outline-none sm:text-sm">
+                    class="max-h-60 rounded-md py-1 text-base text-black :dark:text-white overflow-auto focus:outline-none sm:text-sm">
                     <li v-for="(option,i) in props.options" :key="i" @click="selectOption(option)"
-                        class="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-indigo-600 hover:text-white">
+                        class="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-indigo-600 hover:text-white text-black dark:text-white dark:hover:bg-indigo-600 dark:hover:text-white border-2 border-transparent">
                         <span
                             :class="{ 'font-semibold': selectedOption && selectedOption.value === option.value, 'font-normal': !(selectedOption && selectedOption.value === option.value) }"
                             class="block truncate">
