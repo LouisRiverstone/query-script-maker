@@ -34,6 +34,9 @@ RUN go install github.com/wailsapp/wails/v2/cmd/wails@latest
 # Update wails
 RUN wails update
 
+# Install winicon
+RUN go get github.com/leaanthony/winicon/cmd/winicon
+
 # install delve
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
 
