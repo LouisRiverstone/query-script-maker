@@ -1,9 +1,6 @@
 name: Build
 
-on:
-  push:
-    tags:
-      - '*'
+on: [push, pull_request]
 
 env:
   # Necessary for most environments as build failure can occur due to OOM issues
@@ -15,17 +12,11 @@ jobs:
     # Failure in one platform build won't impact the others
       fail-fast: false
       matrix:
-        build:
-          - name: 'sql-script-maker'
-            platform:  'linux/amd64'
-            os: 'ubuntu-latest'
-          - name: 'sql-script-maker'
-            platform:  'windows/amd64'
-            os: 'windows-latest'
-          - name: 'sql-script-maker'
-            platform:  'darwin/universal'
-            os: 'macos-latest'
-
+        build: [
+          {name: sql-script-maker, platform: linux/amd64, os: ubuntu-latest},
+          {name: sql-script-maker, platform: windows/amd64, os: windows-latest},
+          {name: sql-script-maker, platform: darwin/universal, os: macos-latest}
+        ]
     runs-on: ${{ matrix.build.os }}
     steps:
       - name: Checkout
@@ -41,4 +32,5 @@ jobs:
           build-platform: ${{ matrix.build.platform }}
           build-obfuscate: true
           package: true
+          nsis: true
           go-version: '1.23.5'
