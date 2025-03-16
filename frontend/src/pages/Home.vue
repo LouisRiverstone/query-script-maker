@@ -26,18 +26,30 @@
                         </div>
                         <div v-if="hasVariablesAssigned" class="flex flex-row justify-center">
                             <Editor v-model="query" :show-binded-sql="true" :variables="variables" :data="content"
-                                ref="editorRef">
-                                <div class="flex flex-row justify-end gap-3 w-full">
-                                    <div v-if="!loadingDatabaseConnection" class="flex flex-row gap-3 justify-end">
+                                :minify="minify" ref="editorRef">
+                                <div class="flex md:flex-row flex-col justify-end gap-3 w-full">
+                                    <div class="flex md:flex-row flex-col gap-3 justify-center items-center">
+                                        <div class="flex md:flex-row flex-col items-center space-x-2">
+                                            <input type="checkbox" id="minify" v-model="minify" class="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded 
+                                                focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 
+                                                dark:ring-offset-gray-800 focus:ring-2 dark:focus:ring-indigo-600 
+                                                checked:bg-indigo-500 hover:border-indigo-400 transition-colors" />
+                                            <label for="minify"
+                                                class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                Minify Output
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div v-if="!loadingDatabaseConnection" class="flex md:flex-row flex-col gap-3 justify-end">
                                         <Button v-if="databaseConnection && databaseConnection.ID !== 0" type="button"
                                             @click="testInputSql">Test Input SQL</Button>
                                         <Button v-if="databaseConnection && databaseConnection.ID !== 0" type="button"
-                                          @click="testOutputSql">Test Output SQL</Button>
+                                            @click="testOutputSql">Test Output SQL</Button>
                                     </div>
                                     <div v-if="loadingDatabaseConnection">
                                         <Loader />
                                     </div>
-                                    <div v-if="hasEditor" class="flex flex-row justify-center">
+                                    <div v-if="hasEditor" class="flex md:flex-row flex-col justify-center">
                                         <Button type="button" @click="createSqlFile">Save .SQL</Button>
                                     </div>
                                 </div>
@@ -76,6 +88,7 @@ const variblesCasterRef = ref<typeof VariablesCaster | null>(null);
 const editorRef = ref<typeof Editor | null>(null);
 const query = ref<string>('SELECT * from family limit 1;');
 const showSqlTable = ref<boolean>(false);
+const minify = ref<boolean>(false);
 
 const selectedQueryId = ref<string>("TESTE")
 const queries = ref<Array<main.Query>>([])
@@ -133,8 +146,8 @@ const variables = computed(() => {
     return variblesCasterRef.value.variables;
 })
 
-const selectedQueryDescription = computed(() => { 
-    const querySelected = queries.value.find((query) => query.ID === Number (selectedQueryId.value));
+const selectedQueryDescription = computed(() => {
+    const querySelected = queries.value.find((query) => query.ID === Number(selectedQueryId.value));
 
     if (!querySelected) {
         return;
@@ -180,8 +193,8 @@ const getDatabaseConnection = async () => {
 const testInputSql = async () => {
     try {
         const firstContent = content.value[0]
-        const bindedSql = await MakeBindedSQL(query.value, [firstContent], variables.value)
-    
+        const bindedSql = await MakeBindedSQL(query.value, [firstContent], variables.value, false)
+
         await testSQL(bindedSql)
     } catch (error) {
         alert(error)
@@ -193,7 +206,7 @@ const testOutputSql = async () => {
         if (!hasEditor.value) {
             return;
         }
-        
+
         await testBatchSQL(await editorRef.value!.getBindedSQL())
     } catch (error) {
         alert(error)
@@ -220,7 +233,7 @@ const testBatchSQL = async (query: string) => {
         if (!databaseConnection.value) {
             alert("Database connection not found")
         }
-        
+
         const queries = query.replaceAll("\n", "").split(';').filter((query) => query.trim() !== '').map((query) => `${query};`);
 
         responseTest.value = []

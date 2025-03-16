@@ -22,7 +22,7 @@ export function ImportDatabaseFile():Promise<void>;
 
 export function InsertQueryInDatabase(arg1:main.Query):Promise<void>;
 
-export function MakeBindedSQL(arg1:string,arg2:Array<Record<string, any>>,arg3:Array<main.Variable>):Promise<string>;
+export function MakeBindedSQL(arg1:string,arg2:Array<Record<string, any>>,arg3:Array<main.Variable>,arg4:boolean):Promise<string>;
 
 export function ReadXLSXFile():Promise<string>;
 

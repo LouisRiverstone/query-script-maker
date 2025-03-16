@@ -4,6 +4,7 @@
         <div class="flex flex-col lg:flex-row gap-6">
             <div class="flex flex-col w-full gap-3">
                 <Divider v-if="showBindedSql">Entrada</Divider>
+                <small class="text-gray-600 dark:text-gray-400 text-xs italic mb-1 px-1">To use variables: {{ variableText }}</small>
                 <code-mirror v-model="value" :lang="lang" :extensions="[oneDarkTheme]" :linter="null" basic wrap tab class="w-full" />
             </div>
             <div v-if="showBindedSql" class="flex flex-col w-full gap-3">
@@ -25,11 +26,14 @@ import { computedAsync } from '@vueuse/core';
 
 import Divider from './Divider.vue';
 
+const variableText = ref("{{ variableName }}");
+
 const props = defineProps<{
     variables?: Array<main.Variable>
     data?: { [key: string]: any }[]
     modelValue: string,
     showBindedSql?: boolean
+    minify?: boolean
 }>()
 
 const emit = defineEmits(['update:modelValue']);
@@ -45,7 +49,7 @@ const linesBinded = computedAsync(async () => {
         return "";
     }
 
-    return await MakeBindedSQL(value.value, props.data!, props.variables!) ?? "";
+    return await MakeBindedSQL(value.value, props.data!, props.variables!, props.minify) ?? "";
 }, "");
 
 const getBindedSQL = async (): Promise<string> => {
@@ -53,7 +57,7 @@ const getBindedSQL = async (): Promise<string> => {
         return "";
     }
 
-    return await MakeBindedSQL(value.value, props.data!, props.variables!);
+    return await MakeBindedSQL(value.value, props.data!, props.variables!, props.minify) ?? "";
 }
 
 watch(() => props.modelValue, (newValue) => {

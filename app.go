@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -9,7 +10,9 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	rntm "runtime"
 	"strings"
+	"sync"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
@@ -65,6 +68,7 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func (a *App) ReadXLSXFile() (string, error) {
+	// Selecionar o arquivo
 	selection, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Select File",
 		Filters: []runtime.FileFilter{
@@ -83,58 +87,152 @@ func (a *App) ReadXLSXFile() (string, error) {
 		return "", fmt.Errorf("no file selected")
 	}
 
-	file, err := os.Open(selection)
-
+	// Abre o arquivo diretamente usando a biblioteca excelize
+	// Isso é mais eficiente que usar os.Open() seguido de excelize.OpenReader()
+	xlsxFile, err := excelize.OpenFile(selection)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to open file: %w", err)
 	}
+	defer xlsxFile.Close()
 
-	defer file.Close()
+	// Obtém o nome da primeira planilha
+	sheetName := xlsxFile.GetSheetName(0)
 
-	xlsxFile, err := excelize.OpenReader(file)
-
+	// Usa o método Rows para processar em stream, evitando carregar todo o arquivo na memória
+	rows, err := xlsxFile.Rows(sheetName)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get rows: %w", err)
 	}
+	defer rows.Close()
 
-	rows, err := xlsxFile.GetRows(xlsxFile.GetSheetName(0))
+	// Inicialização de variáveis
+	var headers []string
+	content := make([]map[string]string, 0, 1000) // Pré-aloca com tamanho inicial razoável
+	rowIndex := 0
 
-	if err != nil {
-		return "", err
-	}
+	// Determina quantos CPUs temos disponíveis para uso
+	numCPU := rntm.NumCPU()
+	batchSize := 1000 // Tamanho do lote para processamento
+	rowBatch := make([][]string, 0, batchSize)
 
-	var content []map[string]string
-
-	headers := rows[0]
-
-	for _, row := range rows[1:] {
-		rowData := make(map[string]string)
-
-		for i, cell := range row {
-			rowData[headers[i]] = cell
+	// Processamento em lotes para melhor desempenho
+	for rows.Next() {
+		rowData, err := rows.Columns()
+		if err != nil {
+			// Log do erro mas continua processando
+			log.Printf("Error reading row: %v", err)
+			continue
 		}
 
-		content = append(content, rowData)
+		// Primeira linha contém os cabeçalhos
+		if rowIndex == 0 {
+			headers = make([]string, len(rowData))
+			copy(headers, rowData)
+			rowIndex++
+			continue
+		}
+
+		// Armazena a linha no lote atual
+		rowCopy := make([]string, len(rowData))
+		copy(rowCopy, rowData)
+		rowBatch = append(rowBatch, rowCopy)
+
+		// Quando o lote atinge o tamanho definido, processa paralelamente
+		if len(rowBatch) >= batchSize {
+			processBatch(&content, rowBatch, headers, numCPU)
+			rowBatch = make([][]string, 0, batchSize)
+		}
+
+		rowIndex++
 	}
 
-	jsonData, err := json.Marshal(content)
+	// Processa o último lote se houver dados restantes
+	if len(rowBatch) > 0 {
+		processBatch(&content, rowBatch, headers, numCPU)
+	}
 
+	// Se não temos dados além dos cabeçalhos, retorna um array vazio
+	if len(content) == 0 {
+		return "[]", nil
+	}
+
+	// Usando a biblioteca padrão, mas com um buffer pré-alocado para melhor desempenho
+	buffer := &bytes.Buffer{}
+	encoder := json.NewEncoder(buffer)
+	err = encoder.Encode(content)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to marshal JSON: %w", err)
 	}
 
-	return string(jsonData), nil
+	// Remove a quebra de linha que o Encode adiciona
+	jsonBytes := buffer.Bytes()
+	if len(jsonBytes) > 0 && jsonBytes[len(jsonBytes)-1] == '\n' {
+		jsonBytes = jsonBytes[:len(jsonBytes)-1]
+	}
+
+	return string(jsonBytes), nil
 }
 
-func (a *App) MakeBindedSQL(query string, data []map[string]interface{}, variables []Variable) string {
+// Função auxiliar para processar um lote de linhas em paralelo
+func processBatch(content *[]map[string]string, batch [][]string, headers []string, numWorkers int) {
+	// Limita o número de workers ao número de itens no lote
+	if numWorkers > len(batch) {
+		numWorkers = len(batch)
+	}
+
+	var wg sync.WaitGroup
+	resultChannel := make(chan map[string]string, len(batch))
+
+	// Divide o trabalho entre os workers
+	chunkSize := (len(batch) + numWorkers - 1) / numWorkers
+	for w := 0; w < numWorkers; w++ {
+		wg.Add(1)
+		start := w * chunkSize
+		end := start + chunkSize
+		if end > len(batch) {
+			end = len(batch)
+		}
+
+		// Processa um intervalo de linhas em uma goroutine
+		go func(startIdx, endIdx int) {
+			defer wg.Done()
+
+			for i := startIdx; i < endIdx; i++ {
+				row := batch[i]
+				rowData := make(map[string]string, len(headers))
+
+				for j, cell := range row {
+					if j < len(headers) {
+						rowData[headers[j]] = cell
+					}
+				}
+
+				resultChannel <- rowData
+			}
+		}(start, end)
+	}
+
+	// Goroutine para coletar resultados
+	go func() {
+		wg.Wait()
+		close(resultChannel)
+	}()
+
+	// Coleta os resultados do canal
+	for rowData := range resultChannel {
+		*content = append(*content, rowData)
+	}
+}
+
+func (a *App) MakeBindedSQL(query string, data []map[string]interface{}, variables []Variable, minify bool) string {
 	var result strings.Builder
 
-	re := regexp.MustCompile(`{{\w+}}`)
+	re := regexp.MustCompile(`{{ \w+ }}`)
 
 	for index, row := range data {
 		modifiedQuery := re.ReplaceAllStringFunc(query, func(match string) string {
 			for _, variable := range variables {
-				if match == fmt.Sprintf("{{%s}}", variable.Value) {
+				if match == fmt.Sprintf("{{ %s }}", variable.Value) {
 					if value, ok := row[variable.Field]; ok {
 						return fmt.Sprintf("%v", value)
 					}
@@ -148,6 +246,10 @@ func (a *App) MakeBindedSQL(query string, data []map[string]interface{}, variabl
 		if index != len(data)-1 {
 			result.WriteString("\n")
 		}
+	}
+
+	if minify {
+		return strings.ReplaceAll(result.String(), "\n", " ")
 	}
 
 	return result.String()

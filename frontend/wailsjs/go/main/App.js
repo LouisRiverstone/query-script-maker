@@ -42,8 +42,8 @@ export function InsertQueryInDatabase(arg1) {
   return window['go']['main']['App']['InsertQueryInDatabase'](arg1);
 }
 
-export function MakeBindedSQL(arg1, arg2, arg3) {
-  return window['go']['main']['App']['MakeBindedSQL'](arg1, arg2, arg3);
+export function MakeBindedSQL(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['MakeBindedSQL'](arg1, arg2, arg3, arg4);
 }
 
 export function ReadXLSXFile() {
