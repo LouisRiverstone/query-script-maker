@@ -730,7 +730,7 @@ func createSqliteTables() {
 func (a *App) GetBuildParams() map[string]interface{} {
 	buildParams := make(map[string]interface{})
 
-	buildParams["version"] = "0.0.1"
+	buildParams["version"] = "0.0.2"
 
 	return buildParams
 }
