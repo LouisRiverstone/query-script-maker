@@ -3,12 +3,12 @@
         <slot></slot>
         <div class="flex flex-col lg:flex-row gap-6">
             <div class="flex flex-col w-full gap-3">
-                <Divider v-if="showBindedSql">Entrada</Divider>
+                <Divider v-if="showBindedSql">Input</Divider>
                 <small class="text-gray-600 dark:text-gray-400 text-xs italic mb-1 px-1">To use variables: {{ variableText }}</small>
                 <code-mirror v-model="value" :lang="lang" :extensions="[oneDarkTheme]" :linter="null" basic wrap tab class="w-full" />
             </div>
             <div v-if="showBindedSql" class="flex flex-col w-full gap-3">
-                <Divider>Saída</Divider>
+                <Divider>Output</Divider>
                 <code-mirror v-model="linesBinded" :lang="lang" :extensions="[oneDarkTheme]" :linter="null" basic wrap tab class="w-full" />
             </div>
         </div>

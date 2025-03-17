@@ -3,8 +3,13 @@
         <Steps :steps="stepsHeaders" v-model="step" :disable-next-button="disableNextButton">
             <section v-show="step === 0">
                 <div class="flex flex-col gap-3">
-                    <div class="flex flex-row justify-center ">
-                        <Button type="button" @click="importXLSX">Import .XLSX</Button>
+                    <div class="flex flex-col gap-3">
+                        <div class="flex flex-row justify-center">
+                            <small class="text-sm text-gray-600 dark:text-gray-400 italic font-light">*The SQL Script maker processes only the first sheet of .xlsx</small>
+                        </div>
+                        <div class="flex flex-row justify-center">
+                            <Button type="button" @click="importXLSX">Import .XLSX</Button>
+                        </div>
                     </div>
                     <div v-if="content.length > 0" class="flex flex-row justify-center">
                         <Table :data="content" />
