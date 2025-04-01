@@ -46,6 +46,7 @@
                                         </div>
                                     </div>
                                     <div v-if="!loadingDatabaseConnection" class="flex md:flex-row flex-col gap-3 justify-end">
+                                        <Button type="button" @click="openSqlVisualizer">Visualize SQL Diagram</Button>
                                         <Button v-if="databaseConnection && databaseConnection.ID !== 0" type="button"
                                             @click="testInputSql">Test Input SQL</Button>
                                         <Button v-if="databaseConnection && databaseConnection.ID !== 0" type="button"
@@ -68,11 +69,13 @@
             </section>
         </Steps>
         <SqlResultTable :data="responseTest" v-model="showSqlTable" />
+        <SqlVisualizerModal :isOpen="showSqlVisualizer" :initialQuery="query" @close="closeSqlVisualizer" />
     </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import { asyncComputed } from '@vueuse/core';
 
 import { ReadXLSXFile, CreateSQLFile, GetQueriesList, GetDatabaseConnection, TestQueryInDatabase, TestBatchQueryInDatabase, MakeBindedSQL } from '../../wailsjs/go/main/App'
 import { main } from '../../wailsjs/go/models';
@@ -85,6 +88,7 @@ import Button from '../components/Button.vue';
 import Dropdown from '../components/Dropdown.vue';
 import Loader from '../components/Loader.vue';
 import SqlResultTable from '../components/SqlResultTable.vue';
+import SqlVisualizerModal from '../components/SqlVisualizerModal.vue';
 
 const loading = ref<boolean>(false);
 const loadingDatabaseConnection = ref<boolean>(false);
@@ -93,10 +97,12 @@ const variblesCasterRef = ref<typeof VariablesCaster | null>(null);
 const editorRef = ref<typeof Editor | null>(null);
 const query = ref<string>('SELECT * from family limit 1;');
 const showSqlTable = ref<boolean>(false);
+const showSqlVisualizer = ref<boolean>(false);
 const minify = ref<boolean>(false);
 
 const selectedQueryId = ref<string>("TESTE")
 const queries = ref<Array<main.Query>>([])
+
 
 const databaseConnection = ref<main.DatabaseConnection | undefined>({
     ID: 0,
@@ -112,6 +118,13 @@ const responseTest = ref<{ [k: string]: any }[][]>([]);
 const stepsHeaders = ref<string[]>(['Import .XLSX', 'Assign Variables', 'Save .SQL']);
 
 const step = ref(0);
+
+const firstInputCasted = asyncComputed(async () => {
+    const firstContent = content.value[0]
+
+    return await MakeBindedSQL(query.value, [firstContent], variables.value, false);
+}, )
+
 
 const headers = computed(() => {
     if (content.value.length === 0) {
@@ -198,7 +211,7 @@ const getDatabaseConnection = async () => {
 const testInputSql = async () => {
     try {
         const firstContent = content.value[0]
-        const bindedSql = await MakeBindedSQL(query.value, [firstContent], variables.value, false)
+        const bindedSql = await MakeBindedSQL(query.value, [firstContent], variables.value, false);
 
         await testSQL(bindedSql)
     } catch (error) {
@@ -249,6 +262,14 @@ const testBatchSQL = async (query: string) => {
         throw error
     }
 }
+
+const openSqlVisualizer = () => {
+  showSqlVisualizer.value = true;
+};
+
+const closeSqlVisualizer = () => {
+  showSqlVisualizer.value = false;
+};
 
 const mount = async () => {
     try {
