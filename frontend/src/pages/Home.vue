@@ -1,67 +1,75 @@
 <template>
-    <div class="flex flex-col flex-grow gap-5 w-full p-5">
-        <Steps :steps="stepsHeaders" v-model="step" :disable-next-button="disableNextButton">
-            <section v-show="step === 0">
-                <div class="flex flex-col gap-3">
+    <div class="flex flex-col flex-grow gap-8 w-full p-6 max-w-6xl mx-auto">
+        <Steps :steps="stepsHeaders" v-model="step" :disable-next-button="disableNextButton" class="bg-white dark:bg-gray-800 p-5 rounded-lg shadow-sm">
+            <section v-show="step === 0" class="py-4">
+                <div class="flex flex-col gap-5">
                     <div class="flex flex-col gap-3">
                         <div class="flex flex-row justify-center">
                             <small class="text-sm text-gray-600 dark:text-gray-400 italic font-light">*The SQL Script maker processes only the first sheet of .xlsx</small>
                         </div>
-                        <div class="flex flex-row justify-center">
-                            <Button type="button" @click="importXLSX">Import .XLSX</Button>
+                        <div class="flex flex-row justify-center my-3">
+                            <Button type="button" @click="importXLSX" class="w-48 bg-indigo-600 hover:bg-indigo-700">Import .XLSX</Button>
                         </div>
                     </div>
-                    <div v-if="content.length > 0" class="flex flex-row justify-center">
-                        <Table :data="content" />
+                    <div v-if="content.length > 0" class="flex flex-row justify-center mt-4 overflow-x-auto">
+                        <Table :data="content" class="border border-gray-200 dark:border-gray-700 rounded-md" />
                     </div>
                 </div>
             </section>
-            <section v-show="step === 1">
+            <section v-show="step === 1" class="py-4">
                 <div v-if="headers.length > 0" class="flex flex-row justify-center">
-                    <VariablesCaster :headers="headers" ref="variblesCasterRef" />
+                    <VariablesCaster :headers="headers" ref="variblesCasterRef" class="w-full max-w-4xl" />
                 </div>
             </section>
-            <section v-show="step === 2">
-                <div class="flex flex-col gap-3">
+            <section v-show="step === 2" class="py-4 ">
+                <div class="flex flex-col gap-5">
                     <div v-if="!loading" class="flex flex-col gap-5">
-                        <Dropdown label="Saved Queries" id="select-query" :options="querySelectOptions"
-                            v-model="selectedQueryId" />
-                        <div v-if="selectedQueryDescription">
-                            <small>Query Description: {{ selectedQueryDescription }}</small>
+                        <div class="flex flex-col md:flex-row gap-3 items-start">
+                            <Dropdown label="Saved Queries" id="select-query" :options="querySelectOptions"
+                                v-model="selectedQueryId" class="flex-1" />
                         </div>
-                        <div v-if="hasVariablesAssigned" class="flex flex-row justify-center">
+                        
+                        <div v-if="selectedQueryDescription" class="bg-gray-100 dark:bg-gray-700 p-3 rounded-md">
+                            <span class="font-medium text-gray-700 dark:text-gray-300">Query Description:</span>
+                            <p class="text-gray-600 dark:text-gray-400">{{ selectedQueryDescription }}</p>
+                        </div>
+                        
+                        <div v-if="hasVariablesAssigned" class="flex flex-row justify-center mt-2">
                             <Editor v-model="query" :show-binded-sql="true" :variables="variables" :data="content"
-                                :minify="minify" ref="editorRef">
-                                <div class="flex md:flex-row flex-col justify-end gap-3 w-full">
-                                    <div class="flex md:flex-row flex-col gap-3 justify-center items-center">
-                                        <div class="flex md:flex-row flex-col items-center space-x-2">
-                                            <input type="checkbox" id="minify" v-model="minify" class="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded 
-                                                focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 
-                                                dark:ring-offset-gray-800 focus:ring-2 dark:focus:ring-indigo-600 
-                                                checked:bg-indigo-500 hover:border-indigo-400 transition-colors" />
-                                            <label for="minify"
-                                                class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                Minify Output
-                                            </label>
+                                :minify="minify" ref="editorRef" class="w-full border border-gray-200 dark:border-gray-700 rounded-md">
+                                <div class="flex md:flex-row flex-col justify-between gap-3 w-full mt-4">
+                                    <div class="flex flex-row items-center space-x-2">
+                                        <input type="checkbox" id="minify" v-model="minify" class="w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded 
+                                            focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 
+                                            dark:ring-offset-gray-800 focus:ring-2 dark:focus:ring-indigo-600 
+                                            checked:bg-indigo-500 hover:border-indigo-400 transition-colors" />
+                                        <label for="minify"
+                                            class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Minify Output
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="flex flex-wrap md:flex-row flex-col gap-2 justify-end">
+                                        <Button type="button" @click="openSqlVisualizer" class="bg-purple-600 hover:bg-purple-700">
+                                            Visualize SQL
+                                        </Button>
+                                        <div v-if="!loadingDatabaseConnection" class="flex flex-wrap md:flex-row flex-col gap-2">
+                                            <Button v-if="databaseConnection && databaseConnection.ID !== 0" type="button"
+                                                @click="testInputSql" class="bg-blue-600 hover:bg-blue-700">Test Input SQL</Button>
+                                            <Button v-if="databaseConnection && databaseConnection.ID !== 0" type="button"
+                                                @click="testOutputSql" class="bg-blue-700 hover:bg-blue-800">Test Output SQL</Button>
                                         </div>
-                                    </div>
-                                    <div v-if="!loadingDatabaseConnection" class="flex md:flex-row flex-col gap-3 justify-end">
-                                        <Button type="button" @click="openSqlVisualizer">Visualize SQL Diagram</Button>
-                                        <Button v-if="databaseConnection && databaseConnection.ID !== 0" type="button"
-                                            @click="testInputSql">Test Input SQL</Button>
-                                        <Button v-if="databaseConnection && databaseConnection.ID !== 0" type="button"
-                                            @click="testOutputSql">Test Output SQL</Button>
-                                    </div>
-                                    <div v-if="loadingDatabaseConnection">
-                                        <Loader />
-                                    </div>
-                                    <div v-if="hasEditor" class="flex md:flex-row flex-col justify-center">
-                                        <Button type="button" @click="createSqlFile">Save .SQL</Button>
+                                        <div v-if="loadingDatabaseConnection" class="flex justify-center">
+                                            <Loader />
+                                        </div>
+                                        <div v-if="hasEditor">
+                                            <Button type="button" @click="createSqlFile" class="bg-green-600 hover:bg-green-700">Save .SQL</Button>
+                                        </div>
                                     </div>
                                 </div>
                             </Editor>
                         </div>
-                        <div v-else>
+                        <div v-else class="flex justify-center py-8">
                             <Loader />
                         </div>
                     </div>

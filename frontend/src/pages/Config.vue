@@ -1,23 +1,22 @@
 <template>
-    <div class="flex flex-col flex-grow gap-10 w-full px-5 py-10">
-        <div class="flex flex-col gap-5">
+    <div class="flex flex-col flex-grow gap-10 w-full px-6 py-12 max-w-6xl mx-auto">
+        <div class="flex flex-col gap-6 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
             <Divider>Local Query Database</Divider>
             <div v-if="!loadingDatabase" class="flex flex-col gap-5">
-                <p>
+                <p class="text-gray-700 dark:text-gray-300">
                     Manage your database by importing or exporting data files. Click "Import" to upload a database file
-                    from
-                    your local system, or click "Export" to download the current database file.
+                    from your local system, or click "Export" to download the current database file.
                 </p>
-                <div class="flex flex-row gap-2">
+                <div class="flex flex-row gap-3">
                     <Button type="button" class="w-full" @click="importDatabaseFile">Import</Button>
                     <Button type="button" class="w-full" @click="exportDatabaseFile">Export</Button>
                 </div>
             </div>
-            <div v-else>
+            <div v-else class="flex justify-center py-4">
                 <Loader />
             </div>
         </div>
-        <div class="flex flex-col gap-5">
+        <div class="flex flex-col gap-6 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
             <Divider>Query Editor</Divider>
             <div v-if="!loadingQueries" class="flex flex-col gap-5">
                 <div class="flex flex-row gap-5 items-end">
@@ -27,60 +26,62 @@
                     </div>
                     <Button type="button" @click="resetQuery">NEW QUERY</Button>
                 </div>
-                <div v-if="query" class="flex flex-col gap-3">
+                <div v-if="query" class="flex flex-col gap-4 mt-2">
                     <Input id="query-title" type="text" v-model="query.Title" label="Title" />
                     <Input id="query-title" type="text" v-model="query.Description" label="Description" />
-                    <span>Sql Query:</span>
-                    <Editor v-model="query.Query" :show-binded-sql="false" />
+                    <span class="font-medium text-gray-700 dark:text-gray-300">SQL Query:</span>
+                    <Editor v-model="query.Query" :show-binded-sql="false" class="border border-gray-200 dark:border-gray-700 rounded-md" />
                 </div>
 
-                <div class="flex flex-row justify-end gap-2">
-                    <Button :disabled="!!!query.ID" type="button" @click="() => showDeleteQueryModal = true">DELETE
-                        QUERY</Button>
-                    <Button type="button" @click="() => showSaveQueryModal = true">SAVE QUERY</Button>
+                <div class="flex flex-row justify-end gap-3 mt-2">
+                    <Button :disabled="!!!query.ID" type="button" class="bg-red-600 hover:bg-red-700" @click="() => showDeleteQueryModal = true">DELETE QUERY</Button>
+                    <Button type="button" class="bg-green-600 hover:bg-green-700" @click="() => showSaveQueryModal = true">SAVE QUERY</Button>
                 </div>
             </div>
-            <div v-else>
+            <div v-else class="flex justify-center py-4">
                 <Loader />
             </div>
         </div>
-        <div class="flex flex-col gap-5">
+        <div class="flex flex-col gap-6 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
             <Divider>Database Connection</Divider>
             <div v-if="!loadingDatabaseConnection" class="flex flex-col gap-5">
-                <p>
+                <p class="text-gray-700 dark:text-gray-300">
                     Configure your database connection by filling in the fields below. Click "Save" to save the
                     connection.
                 </p>
-                <div v-if="databaseConnection" class="flex flex-col gap-3">
+                <div v-if="databaseConnection" class="flex flex-col gap-4">
                     <div class="flex md:flex-row flex-col gap-5">
-                        <Input id="database-host" type="text" v-model="databaseConnection.Host" label="Host" />
-                        <Input id="database-port" type="number" v-model="databaseConnection.Port" label="Port" />
+                        <Input id="database-host" type="text" v-model="databaseConnection.Host" label="Host" class="flex-1" />
+                        <Input id="database-port" type="text" v-model="portString" label="Port" class="flex-1" />
                     </div>
                     <div class="flex md:flex-row flex-col gap-5">
                         <Input id="database-database" type="text" v-model="databaseConnection.Database"
-                            label="Database" />
+                            label="Database" class="flex-1" />
                     </div>
                     <div class="flex md:flex-row flex-col gap-5">
                         <Input id="database-username" type="text" v-model="databaseConnection.Username"
-                            label="Username" />
+                            label="Username" class="flex-1" />
                         <Input id="database-password" type="password" v-model="databaseConnection.Password"
-                            label="Password" />
+                            label="Password" class="flex-1" />
                     </div>
                 </div>
-                <div class="flex flex-row justify-end gap-2">
-                    <Button type="button" :disabled="testingConnection" @click="testDatabaseConnection">TEST CONNECTION</Button>
-                    <Button type="button" @click="() => showSaveDatabaseConnection = true">SAVE CONNECTION</Button>
+                <div class="flex flex-row justify-end gap-3 mt-2">
+                    <Button type="button" :disabled="testingConnection" class="bg-blue-600 hover:bg-blue-700" @click="testDatabaseConnection">
+                        <span v-if="!testingConnection">TEST CONNECTION</span>
+                        <Loader v-else />
+                    </Button>
+                    <Button type="button" class="bg-green-600 hover:bg-green-700" @click="() => showSaveDatabaseConnection = true">SAVE CONNECTION</Button>
                 </div>
             </div>
-            <div v-else>
+            <div v-else class="flex justify-center py-4">
                 <Loader />
             </div>
         </div>
-        <ConfirmationModal v-model="showDeleteQueryModal" title="Delete Query" message="Are you sure?"
+        <ConfirmationModal v-model="showDeleteQueryModal" title="Delete Query" message="Are you sure you want to delete this query?"
             @cancel="() => showDeleteQueryModal = false" @confirm="deleteQuery" />
-        <ConfirmationModal v-model="showSaveQueryModal" title="Save Query" message="Are you sure?"
+        <ConfirmationModal v-model="showSaveQueryModal" title="Save Query" message="Do you want to save this query?"
             @cancel="() => showSaveQueryModal = false" @confirm="saveQuery" />
-        <ConfirmationModal v-model="showSaveDatabaseConnection" title="Save Database Connection" message="Are you sure?"
+        <ConfirmationModal v-model="showSaveDatabaseConnection" title="Save Database Connection" message="Do you want to save this database connection?"
             @cancel="() => showSaveDatabaseConnection = false" @confirm="saveDatabaseConnection" />
     </div>
 </template>
@@ -116,6 +117,8 @@ const databaseConnection = ref<main.DatabaseConnection>({
     Password: "",
     Database: ""
 })
+
+const portString = ref("")
 
 const selectedQueryId = ref<string>("")
 const loadingQueries = ref<boolean>(false)
@@ -220,6 +223,7 @@ const getDatabaseConnection = async () => {
     try {
         loadingDatabaseConnection.value = true
         databaseConnection.value = await GetDatabaseConnection()
+        portString.value = databaseConnection.value.Port.toString()
     } catch (error) {
         console.error(error)
     } finally {
@@ -234,13 +238,14 @@ const saveDatabaseConnection = async () => {
         const dbConn: main.DatabaseConnection = {
             ID: databaseConnection.value.ID,
             Host: databaseConnection.value.Host,
-            Port: Number(databaseConnection.value.Port),
+            Port: Number(portString.value),
             Username: databaseConnection.value.Username,
             Password: databaseConnection.value.Password,
             Database: databaseConnection.value.Database,
         }
 
         databaseConnection.value = await CreateOrUpdateDatabaseConnection(dbConn)
+        portString.value = databaseConnection.value.Port.toString()
     } catch (error) {
         console.error(error)
     } finally {

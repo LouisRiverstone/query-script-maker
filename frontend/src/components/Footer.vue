@@ -1,12 +1,17 @@
 <template>
-<footer class="bg-gray-100 dark:bg-gray-900">
-  <div class="relative mx-auto max-w-screen-xl px-1 py-4 sm:px-1 lg:px-2 lg:pt-6 flex flex-col items-center">
-    <p class="text-center text-sm text-gray-500 dark:text-gray-400">
-      <a href="/" @click="openRepository">
-        SQL Script Maker - An Open Source Project by Luiz Neves
+<footer class="bg-gray-100 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
+  <div class="mx-auto max-w-screen-xl px-4 py-4 lg:py-6 flex flex-col sm:flex-row items-center justify-between">
+    <p class="text-center text-sm text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-200">
+      <a href="/" @click.prevent="openRepository" class="inline-flex items-center gap-1">
+        <span>SQL Script Maker</span>
+        <span class="text-xs opacity-75">- An Open Source Project by Luiz Neves</span>
       </a>
     </p>
-    <small class="text-gray-500 dark:text-gray-400">Version: {{ version }}</small>
+    <div class="flex items-center mt-2 sm:mt-0">
+      <span class="text-xs text-gray-500 dark:text-gray-500 bg-gray-200 dark:bg-gray-800 px-2 py-1 rounded-full">
+        v{{ version }}
+      </span>
+    </div>
   </div>
 </footer>
 </template>
