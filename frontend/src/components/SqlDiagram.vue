@@ -194,33 +194,6 @@
               class="fill-none stroke-emerald-500 dark:stroke-emerald-400 stroke-2 filter-glow-light dark:filter-glow-dark opacity-70"
             />
             
-            <!-- Connection lines from tables to results -->
-            <g v-for="(column, colIndex) in resultBox.columns" :key="`result-conn-${colIndex}`">
-              <path 
-                v-if="column.sourceTable && column.table"
-                :d="getResultConnectionPath(column, colIndex)"
-                class="stroke-emerald-400/60 dark:stroke-emerald-400/50 result-connection"
-                stroke-width="1.5"
-                fill="none"
-              />
-              <!-- Círculo destacando o ponto de conexão na tabela -->
-              <circle 
-                v-if="column.sourceTable && column.table"
-                :cx="getResultConnectionStartPoint(column).x - resultBox.x" 
-                :cy="getResultConnectionStartPoint(column).y - resultBox.y" 
-                r="3" 
-                class="fill-emerald-400/80 dark:fill-emerald-400/70 stroke-white dark:stroke-gray-800 stroke-1"
-              />
-              <!-- Círculo destacando o ponto de conexão no resultado -->
-              <circle 
-                v-if="column.sourceTable && column.table"
-                cx="-10" 
-                :cy="getResultRowY(colIndex)" 
-                r="3" 
-                class="fill-emerald-400/80 dark:fill-emerald-400/70 stroke-white dark:stroke-gray-800 stroke-1"
-              />
-            </g>
-            
             <!-- Result Header with simplified styling -->
             <rect 
               :width="resultBox.width" height="40" rx="6" ry="6" 
@@ -297,20 +270,6 @@
                 {{ column.table || '-' }}
               </text>
             </g>
-          </g>
-          
-          <!-- Insert Visualization for INSERT queries -->
-          <g v-if="queryType === 'INSERT'" 
-             :transform="`translate(${insertVisualization.x}, ${insertVisualization.y})`">
-            <!-- Arrow pointing to the table -->
-            <path :d="insertVisualization.path" stroke-width="2" fill="none"
-                  class="stroke-emerald-500 dark:stroke-emerald-400"
-                  :marker-end="isDarkMode ? 'url(#insert-arrow-dark)' : 'url(#insert-arrow-light)'" />
-            <!-- Insert label -->
-            <text :x="insertVisualization.labelX" :y="insertVisualization.labelY" 
-                  text-anchor="middle" class="text-lg font-bold fill-emerald-600 dark:fill-emerald-500">
-              INSERT
-            </text>
           </g>
         </g>
       </svg>
