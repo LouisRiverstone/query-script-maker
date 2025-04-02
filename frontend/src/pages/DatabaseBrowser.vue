@@ -998,8 +998,13 @@ watch(() => activeTab.value, async (newTab) => {
 // Database diagram modal state
 const isDiagramModalOpen = ref<boolean>(false);
 
-// Safely prepare database structure for the diagram
+// Safely prepare database structure for the diagram - use computed with cache to prevent unnecessary re-renders
 const databaseStructureForDiagram = computed(() => {
+    // Only stringify when the modal is open to avoid unnecessary computation
+    if (!isDiagramModalOpen.value) {
+        return "{}";
+    }
+    
     try {
         return JSON.stringify(dbStructure.value || { tables: [] });
     } catch (error) {
@@ -1013,12 +1018,21 @@ const showDiagramModal = () => {
     isDiagramModalOpen.value = true;
 };
 
-// Handle refresh from diagram modal
+// Handle refresh from diagram modal with debounce
+let refreshStructureTimer: number | null = null;
 const handleDiagramRefresh = (newStructure: string) => {
-    try {
-        dbStructure.value = JSON.parse(newStructure);
-    } catch (error) {
-        console.error('Failed to parse refreshed structure:', error);
+    // Prevent multiple rapid updates
+    if (refreshStructureTimer) {
+        clearTimeout(refreshStructureTimer);
     }
+    
+    refreshStructureTimer = window.setTimeout(() => {
+        try {
+            dbStructure.value = JSON.parse(newStructure);
+            refreshStructureTimer = null;
+        } catch (error) {
+            console.error('Failed to parse refreshed structure:', error);
+        }
+    }, 200);
 };
 </script> 
