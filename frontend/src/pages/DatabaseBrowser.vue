@@ -58,6 +58,15 @@
                         </div>
                         <div class="mt-3 sm:mt-0 flex items-center space-x-2">
                             <button 
+                                @click="showDiagramModal" 
+                                class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-indigo-600 bg-white hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                                Show Diagram
+                            </button>
+                            <button 
                                 @click="refreshStructure" 
                                 class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-indigo-600 bg-white hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
                             >
@@ -460,6 +469,14 @@
             </div>
         </div>
     </div>
+    
+    <!-- Database diagram modal -->
+    <DatabaseDiagramModal 
+        :isOpen="isDiagramModalOpen" 
+        :databaseStructure="databaseStructureForDiagram" 
+        @close="isDiagramModalOpen = false"
+        @refresh="handleDiagramRefresh"
+    />
 </template>
 
 <script setup lang="ts">
@@ -469,6 +486,7 @@ import { main } from '../../wailsjs/go/models';
 import Loader from '../components/Loader.vue';
 import Button from '../components/Button.vue';
 import Editor from '../components/Editor.vue';
+import DatabaseDiagramModal from '../components/DatabaseDiagramModal.vue';
 
 // Definição de tipos para melhorar compatibilidade
 interface TableDataCacheType {
@@ -976,4 +994,31 @@ watch(() => activeTab.value, async (newTab) => {
         await refreshTableData();
     }
 });
+
+// Database diagram modal state
+const isDiagramModalOpen = ref<boolean>(false);
+
+// Safely prepare database structure for the diagram
+const databaseStructureForDiagram = computed(() => {
+    try {
+        return JSON.stringify(dbStructure.value || { tables: [] });
+    } catch (error) {
+        console.error('Error preparing database structure for diagram:', error);
+        return JSON.stringify({ tables: [] });
+    }
+});
+
+// Show diagram modal
+const showDiagramModal = () => {
+    isDiagramModalOpen.value = true;
+};
+
+// Handle refresh from diagram modal
+const handleDiagramRefresh = (newStructure: string) => {
+    try {
+        dbStructure.value = JSON.parse(newStructure);
+    } catch (error) {
+        console.error('Failed to parse refreshed structure:', error);
+    }
+};
 </script> 
