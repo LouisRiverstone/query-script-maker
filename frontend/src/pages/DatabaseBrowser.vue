@@ -40,20 +40,26 @@
             <!-- Database browser -->
             <div v-else>
                 <!-- Header with database info -->
-                <div class="bg-indigo-500 dark:bg-indigo-700 px-4 py-5 sm:px-6 text-white">
+                <div class="bg-gradient-to-r from-indigo-600 to-indigo-800 dark:from-indigo-800 dark:to-indigo-900 px-4 py-5 sm:px-6 text-white shadow-lg">
                     <div class="flex flex-col sm:flex-row justify-between">
                         <div>
-                            <h3 class="text-lg leading-6 font-medium">
+                            <h3 class="text-lg leading-6 font-medium flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                                </svg>
                                 Database Browser: {{ databaseConnection.Database }}
                             </h3>
-                            <p class="mt-1 max-w-2xl text-sm opacity-80">
+                            <p class="mt-1 max-w-2xl text-sm opacity-80 flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
                                 {{ databaseConnection.Username }}@{{ databaseConnection.Host }}:{{ databaseConnection.Port }}
                             </p>
                         </div>
                         <div class="mt-3 sm:mt-0 flex items-center space-x-2">
                             <button 
                                 @click="refreshStructure" 
-                                class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-indigo-600 bg-white hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-indigo-600 bg-white hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -62,7 +68,7 @@
                             </button>
                             <button 
                                 @click="loadDatabaseStructure(true)" 
-                                class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-700 hover:bg-indigo-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -78,24 +84,37 @@
                     <!-- Table list (sidebar) -->
                     <div class="w-full md:w-64 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
                         <div class="p-4 border-b border-gray-200 dark:border-gray-700">
-                            <h4 class="font-medium text-gray-700 dark:text-gray-300">Tables</h4>
-                            <div class="mt-2">
+                            <h4 class="font-medium text-gray-700 dark:text-gray-300 flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+                                </svg>
+                                Tables
+                                <span class="ml-2 bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 text-xs rounded-full px-2 py-0.5">
+                                    {{ filteredTables.length }}
+                                </span>
+                            </h4>
+                            <div class="mt-2 relative">
+                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <svg class="h-4 w-4 text-gray-400 dark:text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
                                 <input 
                                     type="text" 
                                     placeholder="Filter tables..." 
                                     v-model="tableFilter"
-                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                    class="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                                 />
                             </div>
                         </div>
-                        <div class="overflow-y-auto h-[calc(100vh-300px)]">
+                        <div class="overflow-y-auto h-[calc(100vh-300px)] scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600">
                             <ul class="divide-y divide-gray-200 dark:divide-gray-700">
                                 <li 
                                     v-for="table in filteredTables" 
                                     :key="table.name"
                                     @click="selectTable(table.name)"
-                                    class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                    :class="selectedTable === table.name ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''"
+                                    class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150"
+                                    :class="selectedTable === table.name ? 'bg-indigo-50 dark:bg-indigo-900/30 border-l-4 border-indigo-500' : ''"
                                 >
                                     <div class="px-4 py-3">
                                         <div class="flex items-center">
@@ -106,7 +125,10 @@
                                                 {{ table.name }}
                                             </span>
                                         </div>
-                                        <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        <div class="mt-1 text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                                <path d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" />
+                                            </svg>
                                             {{ table.columns.length }} columns
                                         </div>
                                     </div>
@@ -128,22 +150,73 @@
                         </div>
                         
                         <div v-else>
+                            <!-- Tabs -->
+                            <div class="px-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                                <div class="flex space-x-8">
+                                    <button 
+                                        @click="activeTab = 'data'" 
+                                        class="py-4 border-b-2 font-medium text-sm flex items-center"
+                                        :class="activeTab === 'data' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                                        </svg>
+                                        Browse
+                                    </button>
+                                     <button 
+                                        @click="activeTab = 'structure'" 
+                                        class="py-4 border-b-2 font-medium text-sm flex items-center"
+                                        :class="activeTab === 'structure' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                        </svg>
+                                        Structure
+                                    </button>
+                                    <button 
+                                        @click="activeTab = 'sql'" 
+                                        class="py-4 border-b-2 font-medium text-sm flex items-center"
+                                        :class="activeTab === 'sql' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                                        </svg>
+                                        SQL
+                                    </button>
+                                </div>
+                            </div>
+                            
                             <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
                                 <div class="flex justify-between items-center">
-                                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">
+                                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M5 4a3 3 0 00-3 3v6a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H5zm-1 9v-1h5v2H5a1 1 0 01-1-1zm7 1h4a1 1 0 001-1v-1h-5v2zm0-4h5V8h-5v2zM9 8H4v2h5V8z" clip-rule="evenodd" />
+                                        </svg>
                                         {{ selectedTable }}
                                     </h3>
                                     <div class="flex space-x-2">
                                         <button 
-                                            @click="refreshTableData" 
-                                            class="px-3 py-1.5 text-xs font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                            @click="exportTableData" 
+                                            class="px-3 py-1.5 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200 flex items-center"
                                         >
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                            </svg>
+                                            Export
+                                        </button>
+                                        <button 
+                                            @click="refreshTableData" 
+                                            class="px-3 py-1.5 text-xs font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 flex items-center"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
                                             Refresh
                                         </button>
                                         <select 
                                             v-model="rowLimit" 
                                             @change="refreshTableData"
-                                            class="px-3 py-1.5 text-xs font-medium rounded-md bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                            class="px-3 py-1.5 text-xs font-medium rounded-md bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200"
                                         >
                                             <option value="10">10 rows</option>
                                             <option value="25">25 rows</option>
@@ -154,36 +227,91 @@
                                 </div>
                             </div>
 
-                            <!-- Tabs -->
-                            <div class="px-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-                                <div class="flex space-x-8">
-                                    <button 
-                                        @click="activeTab = 'data'" 
-                                        class="py-4 border-b-2 font-medium text-sm"
-                                        :class="activeTab === 'data' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
-                                    >
-                                        Browse
-                                    </button>
-                                     <button 
-                                        @click="activeTab = 'structure'" 
-                                        class="py-4 border-b-2 font-medium text-sm"
-                                        :class="activeTab === 'structure' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
-                                    >
-                                        Structure
-                                    </button>
-                                    <button 
-                                        @click="activeTab = 'sql'" 
-                                        class="py-4 border-b-2 font-medium text-sm"
-                                        :class="activeTab === 'sql' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
-                                    >
-                                        SQL
-                                    </button>
-                                </div>
-                            </div>
-                            
                             <div class="p-4">
+                                <!-- Data Tab -->
+                                <div v-if="activeTab === 'data'">
+                                    <div v-if="tableDataLoading" class="flex justify-center items-center py-12">
+                                        <Loader />
+                                    </div>
+                                    <div v-else-if="tableData.length === 0" class="text-center py-12">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400 dark:text-gray-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                                        </svg>
+                                        <p class="text-gray-500 dark:text-gray-400">No data found in this table</p>
+                                    </div>
+                                    <div v-else>
+                                        <div class="border border-gray-200 dark:border-gray-700 rounded-md shadow-sm overflow-x-auto">
+                                            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                <thead class="bg-gray-50 dark:bg-gray-800">
+                                                    <tr>
+                                                        <th v-for="column in tableColumns" :key="column"
+                                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                            {{ column }}
+                                                        </th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                                                    <tr v-for="(row, rowIndex) in tableData" :key="rowIndex" class="hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors duration-150">
+                                                        <td v-for="column in tableColumns" :key="`${rowIndex}-${column}`"
+                                                            class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                            <span v-if="row[column] === null" class="text-gray-400 dark:text-gray-500 italic">NULL</span>
+                                                            <span v-else>{{ row[column] }}</span>
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        
+                                        <!-- Enhanced pagination -->
+                                        <div class="flex items-center justify-between mt-4">
+                                            <div class="text-sm text-gray-700 dark:text-gray-300 flex items-center">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
+                                                    <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" />
+                                                </svg>
+                                                <span>
+                                                    Showing <span class="font-medium">{{ tableData.length }}</span> rows
+                                                    <span v-if="tableDataTotalRows[`${databaseConnection.Database}_${selectedTable}`]" class="ml-1">
+                                                        of <span class="font-medium">{{ tableDataTotalRows[`${databaseConnection.Database}_${selectedTable}`] }}</span> total
+                                                    </span>
+                                                    <span v-if="currentPage > 0" class="ml-1">
+                                                        - Page <span class="font-medium">{{ currentPage + 1 }}</span>
+                                                    </span>
+                                                </span>
+                                            </div>
+                                            <div class="flex space-x-2">
+                                                <button
+                                                    @click="loadPreviousPage"
+                                                    :disabled="currentPage === 0"
+                                                    class="px-3 py-1 text-sm font-medium rounded-md transition-colors duration-200 flex items-center"
+                                                    :class="currentPage === 0 
+                                                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' 
+                                                        : 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200'"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                                                    </svg>
+                                                    Previous
+                                                </button>
+                                                <button
+                                                    @click="loadNextPage"
+                                                    :disabled="!hasMorePages"
+                                                    class="px-3 py-1 text-sm font-medium rounded-md transition-colors duration-200 flex items-center"
+                                                    :class="!hasMorePages 
+                                                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' 
+                                                        : 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200'"
+                                                >
+                                                    Next
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
                                 <!-- Structure Tab -->
-                                <div v-if="activeTab === 'structure'">
+                                <div v-else-if="activeTab === 'structure'">
                                     <div class="border border-gray-200 dark:border-gray-700 rounded-md shadow-sm overflow-hidden">
                                         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                             <thead class="bg-gray-50 dark:bg-gray-800">
@@ -236,92 +364,58 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Data Tab -->
-                                <div v-else-if="activeTab === 'data'">
-                                    <div v-if="tableDataLoading" class="flex justify-center items-center py-12">
-                                        <Loader />
-                                    </div>
-                                    <div v-else-if="tableData.length === 0" class="text-center py-12">
-                                        <p class="text-gray-500 dark:text-gray-400">No data found in this table</p>
-                                    </div>
-                                    <div v-else>
-                                        <div class="border border-gray-200 dark:border-gray-700 rounded-md shadow-sm overflow-x-auto">
-                                            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                                <thead class="bg-gray-50 dark:bg-gray-800">
-                                                    <tr>
-                                                        <th v-for="column in tableColumns" :key="column"
-                                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                            {{ column }}
-                                                        </th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                                                    <tr v-for="(row, rowIndex) in tableData" :key="rowIndex">
-                                                        <td v-for="column in tableColumns" :key="`${rowIndex}-${column}`"
-                                                            class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                            {{ row[column] === null ? 'NULL' : row[column] }}
-                                                        </td>
-                                                    </tr>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                        
-                                        <!-- Simple pagination -->
-                                        <div class="flex items-center justify-between mt-4">
-                                            <div class="text-sm text-gray-700 dark:text-gray-300">
-                                                Showing <span class="font-medium">{{ tableData.length }}</span> rows
-                                            </div>
-                                            <div class="flex space-x-2">
-                                                <button
-                                                    @click="loadPreviousPage"
-                                                    :disabled="currentPage === 0"
-                                                    class="px-3 py-1 text-sm font-medium rounded-md"
-                                                    :class="currentPage === 0 
-                                                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' 
-                                                        : 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200'"
-                                                >
-                                                    Previous
-                                                </button>
-                                                <button
-                                                    @click="loadNextPage"
-                                                    :disabled="!hasMorePages"
-                                                    class="px-3 py-1 text-sm font-medium rounded-md"
-                                                    :class="!hasMorePages 
-                                                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' 
-                                                        : 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200'"
-                                                >
-                                                    Next
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
                                 <!-- SQL Tab -->
                                 <div v-else-if="activeTab === 'sql'">
-                                    <div class="mb-4">
-                                        <Editor 
-                                            v-model="sqlQuery" 
-                                            placeholder="Enter your SQL query here..." 
-                                            height="180px"
-                                        />
-                                    </div>
-                                    <div class="flex justify-end mb-6">
-                                        <Button 
-                                            type="button" 
-                                            class="bg-indigo-600 hover:bg-indigo-700" 
-                                            @click="executeCustomQuery"
-                                            :disabled="sqlQueryLoading"
-                                        >
-                                            <span v-if="!sqlQueryLoading">Execute Query</span>
-                                            <Loader v-else />
-                                        </Button>
+                                    <div class="bg-gray-100 dark:bg-gray-800 rounded-lg p-4 mb-4">
+                                        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
+                                            </svg>
+                                            SQL Query Editor
+                                        </h4>
+                                        <div class="mb-2">
+                                            <Editor 
+                                                v-model="sqlQuery" 
+                                                placeholder="Enter your SQL query here..." 
+                                                height="180px"
+                                                class="dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md"
+                                            />
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                Use semicolons to separate multiple queries
+                                            </div>
+                                            <Button 
+                                                type="button" 
+                                                class="bg-indigo-600 hover:bg-indigo-700 flex items-center" 
+                                                @click="executeCustomQuery"
+                                                :disabled="sqlQueryLoading"
+                                            >
+                                                <svg v-if="!sqlQueryLoading" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                                </svg>
+                                                <span v-if="!sqlQueryLoading">Execute Query</span>
+                                                <Loader v-else />
+                                            </Button>
+                                        </div>
                                     </div>
                                     
                                     <div v-if="sqlQueryResults.length > 0" class="mt-6">
-                                        <h4 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Query Results</h4>
+                                        <h4 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4 flex items-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            Query Results
+                                        </h4>
                                         <div v-for="(result, resultIndex) in sqlQueryResults" :key="resultIndex" class="mb-6">
-                                            <div v-if="Array.isArray(result) && result.length > 0" class="border border-gray-200 dark:border-gray-700 rounded-md shadow-sm overflow-x-auto">
+                                            <div v-if="Array.isArray(result) && result.length > 0 && !result[0].error" class="border border-gray-200 dark:border-gray-700 rounded-md shadow-sm overflow-x-auto">
+                                                <div class="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Result set #{{ resultIndex + 1 }}</span>
+                                                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ result.length }} rows</span>
+                                                </div>
                                                 <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                                     <thead class="bg-gray-50 dark:bg-gray-800">
                                                         <tr>
@@ -332,17 +426,27 @@
                                                         </tr>
                                                     </thead>
                                                     <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                                                        <tr v-for="(row, rowIndex) in result" :key="rowIndex">
+                                                        <tr v-for="(row, rowIndex) in result" :key="rowIndex" class="hover:bg-gray-50 dark:hover:bg-gray-800/70">
                                                             <td v-for="column in Object.keys(result[0])" :key="`${rowIndex}-${column}`"
                                                                 class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                                {{ row[column] === null ? 'NULL' : row[column] }}
+                                                                <span v-if="row[column] === null" class="text-gray-400 dark:text-gray-500 italic">NULL</span>
+                                                                <span v-else>{{ row[column] }}</span>
                                                             </td>
                                                         </tr>
                                                     </tbody>
                                                 </table>
                                             </div>
-                                            <div v-else class="text-center py-6 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
-                                                <p class="text-gray-500 dark:text-gray-400">
+                                            <div v-else-if="result[0] && result[0].error" class="text-center py-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-red-700 dark:text-red-300">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                <p>{{ result[0].error }}</p>
+                                            </div>
+                                            <div v-else class="text-center py-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mx-auto mb-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                                <p class="text-green-700 dark:text-green-300">
                                                     Query executed successfully ({{ Array.isArray(result) ? result.length : 0 }} rows affected)
                                                 </p>
                                             </div>
@@ -797,6 +901,55 @@ const executeCustomQuery = async () => {
         sqlQueryResults.value = [];
     } finally {
         sqlQueryLoading.value = false;
+    }
+};
+
+// Export table data to CSV
+const exportTableData = async () => {
+    if (!selectedTable.value || tableData.value.length === 0) return;
+    
+    try {
+        // Create CSV content
+        const headers = tableColumns.value;
+        const csvRows = [];
+        
+        // Add headers
+        csvRows.push(headers.join(','));
+        
+        // Add data rows
+        for (const row of tableData.value) {
+            const values = headers.map(header => {
+                const value = row[header];
+                // Handle null values, quotes, and commas in values
+                if (value === null) return 'NULL';
+                if (typeof value === 'string') {
+                    // Escape quotes and wrap in quotes if needed
+                    if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+                        return `"${value.replace(/"/g, '""')}"`;
+                    }
+                    return value;
+                }
+                return value;
+            });
+            csvRows.push(values.join(','));
+        }
+        
+        // Combine into a single CSV string
+        const csvContent = csvRows.join('\n');
+        
+        // Create a blob and download
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `${selectedTable.value}_export.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } catch (error) {
+        console.error('Failed to export table data:', error);
+        alert('Failed to export data. Please try again.');
     }
 };
 
