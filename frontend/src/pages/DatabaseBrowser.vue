@@ -67,7 +67,7 @@
                                 Refresh
                             </button>
                             <button 
-                                @click="loadDatabaseStructure(true)" 
+                                @click="() => loadDatabaseStructure(true)" 
                                 class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-700 hover:bg-indigo-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -187,7 +187,7 @@
                             </div>
                             
                             <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-                                <div class="flex justify-between items-center">
+                                <div class="flex items-center justify-between">
                                     <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
                                             <path fill-rule="evenodd" d="M5 4a3 3 0 00-3 3v6a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H5zm-1 9v-1h5v2H5a1 1 0 01-1-1zm7 1h4a1 1 0 001-1v-1h-5v2zm0-4h5V8h-5v2zM9 8H4v2h5V8z" clip-rule="evenodd" />
@@ -205,7 +205,7 @@
                                             Export
                                         </button>
                                         <button 
-                                            @click="refreshTableData" 
+                                            @click="refreshTableData()" 
                                             class="px-3 py-1.5 text-xs font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 flex items-center"
                                         >
                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -215,7 +215,7 @@
                                         </button>
                                         <select 
                                             v-model="rowLimit" 
-                                            @change="refreshTableData"
+                                            @change="onRowLimitChange"
                                             class="px-3 py-1.5 text-xs font-medium rounded-md bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200"
                                         >
                                             <option value="10">10 rows</option>
@@ -951,6 +951,13 @@ const exportTableData = async () => {
         console.error('Failed to export table data:', error);
         alert('Failed to export data. Please try again.');
     }
+};
+
+// Handler for row limit change
+const onRowLimitChange = () => {
+    // Reset to first page when changing the number of rows
+    currentPage.value = 0;
+    refreshTableData();
 };
 
 // Observe mudanças na conexão de banco e recarregue a estrutura quando necessário
