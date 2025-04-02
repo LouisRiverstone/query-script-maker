@@ -37,6 +37,16 @@
                             </router-link>
                         </li>
 
+                        <li v-if="hasDatabaseConnection">
+                            <router-link to="/database-browser"
+                                class="relative flex items-center px-2 py-1 font-medium transition-colors"
+                                :class="[$route.path === '/database-browser' ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-700 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400']"
+                                active-class="text-indigo-600 dark:text-indigo-400">
+                                <span>Database Browser</span>
+                                <span v-if="$route.path === '/database-browser'" class="absolute inset-x-0 -bottom-px h-0.5 bg-indigo-600 dark:bg-indigo-400"></span>
+                            </router-link>
+                        </li>
+
                         <li>
                             <router-link to="/config"
                                 class="relative flex items-center px-2 py-1 font-medium transition-colors"
@@ -75,6 +85,11 @@
                     @click="mobileMenuOpen = false">
                     Script Maker
                 </router-link>
+                <router-link v-if="hasDatabaseConnection" to="/database-browser"
+                    class="py-2 text-gray-700 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400"
+                    @click="mobileMenuOpen = false">
+                    Database Browser
+                </router-link>
                 <router-link to="/config"
                     class="py-2 text-gray-700 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400"
                     @click="mobileMenuOpen = false">
@@ -92,9 +107,11 @@
 
 <script lang="ts" setup>
 import { BrowserOpenURL } from '../../wailsjs/runtime';
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
+import { GetDatabaseConnection } from '../../wailsjs/go/main/App';
 
 const mobileMenuOpen = ref(false);
+const hasDatabaseConnection = ref(false);
 
 const openRepository = () => {
   BrowserOpenURL("https://github.com/LouisRiverstone/query-script-maker");
@@ -104,4 +121,18 @@ const openRepositoryAndCloseMenu = () => {
   openRepository();
   mobileMenuOpen.value = false;
 };
+
+// Check if a database connection exists
+const checkDatabaseConnection = async () => {
+  try {
+    const connection = await GetDatabaseConnection();
+    hasDatabaseConnection.value = !!connection && !!connection.ID;
+  } catch (error) {
+    hasDatabaseConnection.value = false;
+  }
+};
+
+onMounted(async () => {
+  await checkDatabaseConnection();
+});
 </script>

@@ -1,0 +1,819 @@
+<template>
+    <div class="container mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <div class="bg-white dark:bg-gray-900 shadow overflow-hidden rounded-lg">
+            <!-- Loading state -->
+            <div v-if="loading" class="flex justify-center items-center py-12">
+                <Loader />
+            </div>
+            
+            <!-- Error state -->
+            <div v-else-if="hasError" class="py-8 px-4 text-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-red-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Something went wrong</h3>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ errorMessage }}</p>
+                <div class="mt-6">
+                    <button 
+                        @click="retryLoading" 
+                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    >
+                        Try Again
+                    </button>
+                </div>
+            </div>
+            
+            <!-- No database connection -->
+            <div v-else-if="!hasConnection" class="py-8 px-4 text-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400 dark:text-gray-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5v14M4 20h16a2 2 0 002-2V6a2 2 0 00-2-2H4a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">No Database Connected</h3>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Please add a database connection in the configuration page.</p>
+                <div class="mt-6">
+                    <router-link to="/config" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        Go to Config
+                    </router-link>
+                </div>
+            </div>
+            
+            <!-- Database browser -->
+            <div v-else>
+                <!-- Header with database info -->
+                <div class="bg-indigo-500 dark:bg-indigo-700 px-4 py-5 sm:px-6 text-white">
+                    <div class="flex flex-col sm:flex-row justify-between">
+                        <div>
+                            <h3 class="text-lg leading-6 font-medium">
+                                Database Browser: {{ databaseConnection.Database }}
+                            </h3>
+                            <p class="mt-1 max-w-2xl text-sm opacity-80">
+                                {{ databaseConnection.Username }}@{{ databaseConnection.Host }}:{{ databaseConnection.Port }}
+                            </p>
+                        </div>
+                        <div class="mt-3 sm:mt-0 flex items-center space-x-2">
+                            <button 
+                                @click="refreshStructure" 
+                                class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-indigo-600 bg-white hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                Refresh
+                            </button>
+                            <button 
+                                @click="loadDatabaseStructure(true)" 
+                                class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                </svg>
+                                Refresh Structures
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Browser layout -->
+                <div class="flex flex-col md:flex-row">
+                    <!-- Table list (sidebar) -->
+                    <div class="w-full md:w-64 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                        <div class="p-4 border-b border-gray-200 dark:border-gray-700">
+                            <h4 class="font-medium text-gray-700 dark:text-gray-300">Tables</h4>
+                            <div class="mt-2">
+                                <input 
+                                    type="text" 
+                                    placeholder="Filter tables..." 
+                                    v-model="tableFilter"
+                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                />
+                            </div>
+                        </div>
+                        <div class="overflow-y-auto h-[calc(100vh-300px)]">
+                            <ul class="divide-y divide-gray-200 dark:divide-gray-700">
+                                <li 
+                                    v-for="table in filteredTables" 
+                                    :key="table.name"
+                                    @click="selectTable(table.name)"
+                                    class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    :class="selectedTable === table.name ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''"
+                                >
+                                    <div class="px-4 py-3">
+                                        <div class="flex items-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-indigo-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M5 4a3 3 0 00-3 3v6a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H5zm-1 9v-1h5v2H5a1 1 0 01-1-1zm7 1h4a1 1 0 001-1v-1h-5v2zm0-4h5V8h-5v2zM9 8H4v2h5V8z" clip-rule="evenodd" />
+                                            </svg>
+                                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                {{ table.name }}
+                                            </span>
+                                        </div>
+                                        <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                            {{ table.columns.length }} columns
+                                        </div>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <!-- Main content area -->
+                    <div class="flex-1 overflow-x-auto">
+                        <div v-if="!selectedTable" class="flex items-center justify-center h-[calc(100vh-300px)]">
+                            <div class="text-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400 dark:text-gray-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
+                                </svg>
+                                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Select a table</h3>
+                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Choose a table from the list to view its data</p>
+                            </div>
+                        </div>
+                        
+                        <div v-else>
+                            <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                                <div class="flex justify-between items-center">
+                                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">
+                                        {{ selectedTable }}
+                                    </h3>
+                                    <div class="flex space-x-2">
+                                        <button 
+                                            @click="refreshTableData" 
+                                            class="px-3 py-1.5 text-xs font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                        >
+                                            Refresh
+                                        </button>
+                                        <select 
+                                            v-model="rowLimit" 
+                                            @change="refreshTableData"
+                                            class="px-3 py-1.5 text-xs font-medium rounded-md bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                        >
+                                            <option value="10">10 rows</option>
+                                            <option value="25">25 rows</option>
+                                            <option value="50">50 rows</option>
+                                            <option value="100">100 rows</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tabs -->
+                            <div class="px-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                                <div class="flex space-x-8">
+                                    <button 
+                                        @click="activeTab = 'data'" 
+                                        class="py-4 border-b-2 font-medium text-sm"
+                                        :class="activeTab === 'data' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
+                                    >
+                                        Browse
+                                    </button>
+                                     <button 
+                                        @click="activeTab = 'structure'" 
+                                        class="py-4 border-b-2 font-medium text-sm"
+                                        :class="activeTab === 'structure' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
+                                    >
+                                        Structure
+                                    </button>
+                                    <button 
+                                        @click="activeTab = 'sql'" 
+                                        class="py-4 border-b-2 font-medium text-sm"
+                                        :class="activeTab === 'sql' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
+                                    >
+                                        SQL
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="p-4">
+                                <!-- Structure Tab -->
+                                <div v-if="activeTab === 'structure'">
+                                    <div class="border border-gray-200 dark:border-gray-700 rounded-md shadow-sm overflow-hidden">
+                                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                            <thead class="bg-gray-50 dark:bg-gray-800">
+                                                <tr>
+                                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                        Column
+                                                    </th>
+                                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                        Type
+                                                    </th>
+                                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                        Nullable
+                                                    </th>
+                                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                        Key
+                                                    </th>
+                                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                        Default
+                                                    </th>
+                                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                        Extra
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                                                <tr v-for="column in selectedTableColumns" :key="column.name">
+                                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                                        {{ column.name }}
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                        {{ column.type }}
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                        {{ column.nullable === 'YES' ? 'Yes' : 'No' }}
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                        <span v-if="column.isPrimary" class="text-amber-600 dark:text-amber-400 font-medium">Primary</span>
+                                                        <span v-else-if="column.key">{{ column.key }}</span>
+                                                        <span v-else>-</span>
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                        {{ column.default || 'NULL' }}
+                                                    </td>
+                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                        {{ column.extra || '-' }}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                
+                                <!-- Data Tab -->
+                                <div v-else-if="activeTab === 'data'">
+                                    <div v-if="tableDataLoading" class="flex justify-center items-center py-12">
+                                        <Loader />
+                                    </div>
+                                    <div v-else-if="tableData.length === 0" class="text-center py-12">
+                                        <p class="text-gray-500 dark:text-gray-400">No data found in this table</p>
+                                    </div>
+                                    <div v-else>
+                                        <div class="border border-gray-200 dark:border-gray-700 rounded-md shadow-sm overflow-x-auto">
+                                            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                <thead class="bg-gray-50 dark:bg-gray-800">
+                                                    <tr>
+                                                        <th v-for="column in tableColumns" :key="column"
+                                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                            {{ column }}
+                                                        </th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                                                    <tr v-for="(row, rowIndex) in tableData" :key="rowIndex">
+                                                        <td v-for="column in tableColumns" :key="`${rowIndex}-${column}`"
+                                                            class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                            {{ row[column] === null ? 'NULL' : row[column] }}
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        
+                                        <!-- Simple pagination -->
+                                        <div class="flex items-center justify-between mt-4">
+                                            <div class="text-sm text-gray-700 dark:text-gray-300">
+                                                Showing <span class="font-medium">{{ tableData.length }}</span> rows
+                                            </div>
+                                            <div class="flex space-x-2">
+                                                <button
+                                                    @click="loadPreviousPage"
+                                                    :disabled="currentPage === 0"
+                                                    class="px-3 py-1 text-sm font-medium rounded-md"
+                                                    :class="currentPage === 0 
+                                                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' 
+                                                        : 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200'"
+                                                >
+                                                    Previous
+                                                </button>
+                                                <button
+                                                    @click="loadNextPage"
+                                                    :disabled="!hasMorePages"
+                                                    class="px-3 py-1 text-sm font-medium rounded-md"
+                                                    :class="!hasMorePages 
+                                                        ? 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed' 
+                                                        : 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200'"
+                                                >
+                                                    Next
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- SQL Tab -->
+                                <div v-else-if="activeTab === 'sql'">
+                                    <div class="mb-4">
+                                        <Editor 
+                                            v-model="sqlQuery" 
+                                            placeholder="Enter your SQL query here..." 
+                                            height="180px"
+                                        />
+                                    </div>
+                                    <div class="flex justify-end mb-6">
+                                        <Button 
+                                            type="button" 
+                                            class="bg-indigo-600 hover:bg-indigo-700" 
+                                            @click="executeCustomQuery"
+                                            :disabled="sqlQueryLoading"
+                                        >
+                                            <span v-if="!sqlQueryLoading">Execute Query</span>
+                                            <Loader v-else />
+                                        </Button>
+                                    </div>
+                                    
+                                    <div v-if="sqlQueryResults.length > 0" class="mt-6">
+                                        <h4 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Query Results</h4>
+                                        <div v-for="(result, resultIndex) in sqlQueryResults" :key="resultIndex" class="mb-6">
+                                            <div v-if="Array.isArray(result) && result.length > 0" class="border border-gray-200 dark:border-gray-700 rounded-md shadow-sm overflow-x-auto">
+                                                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                    <thead class="bg-gray-50 dark:bg-gray-800">
+                                                        <tr>
+                                                            <th v-for="column in Object.keys(result[0])" :key="column"
+                                                                class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                                {{ column }}
+                                                            </th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                                                        <tr v-for="(row, rowIndex) in result" :key="rowIndex">
+                                                            <td v-for="column in Object.keys(result[0])" :key="`${rowIndex}-${column}`"
+                                                                class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                {{ row[column] === null ? 'NULL' : row[column] }}
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <div v-else class="text-center py-6 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
+                                                <p class="text-gray-500 dark:text-gray-400">
+                                                    Query executed successfully ({{ Array.isArray(result) ? result.length : 0 }} rows affected)
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, watch } from 'vue';
+import { GetDatabaseConnection, GetDatabaseStructure, TestQueryInDatabase, GetLatestDatabaseStructure } from '../../wailsjs/go/main/App';
+import { main } from '../../wailsjs/go/models';
+import Loader from '../components/Loader.vue';
+import Button from '../components/Button.vue';
+import Editor from '../components/Editor.vue';
+
+// Definição de tipos para melhorar compatibilidade
+interface TableDataCacheType {
+  [key: string]: Record<number, any[]>;
+}
+
+interface TableDataTotalRowsType {
+  [key: string]: number;
+}
+
+interface StructureCacheType {
+  [key: string]: any;
+}
+
+const loading = ref<boolean>(true);
+const hasConnection = ref<boolean>(false);
+const hasError = ref<boolean>(false);
+const errorMessage = ref<string>('An unexpected error occurred. Please try again.');
+const databaseConnection = ref<main.DatabaseConnection>({
+    Username: '',
+    Password: '',
+    Host: '',
+    Port: 3306,
+    Database: ''
+});
+
+const dbStructure = ref<any>(null);
+const tableFilter = ref<string>('');
+const selectedTable = ref<string>('');
+const activeTab = ref<string>('data');
+
+// Table data browsing
+const tableData = ref<any[]>([]);
+const tableColumns = ref<string[]>([]);
+const tableDataLoading = ref<boolean>(false);
+const rowLimit = ref<string>('25');
+const currentPage = ref<number>(0);
+const tableDataCache = ref<TableDataCacheType>({}); // Cache para dados de tabela por página
+const tableDataTotalRows = ref<TableDataTotalRowsType>({}); // Armazenar o total de linhas por tabela
+
+// SQL query tab
+const sqlQuery = ref<string>('');
+const sqlQueryResults = ref<any[]>([]);
+const sqlQueryLoading = ref<boolean>(false);
+
+// Cache da estrutura
+const structureCache = ref<StructureCacheType>({});
+const lastRefreshTime = ref<number>(0);
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+// Filtered tables based on search
+const filteredTables = computed(() => {
+    if (!dbStructure.value || !dbStructure.value.tables) return [];
+    
+    if (!tableFilter.value) return dbStructure.value.tables;
+    
+    return dbStructure.value.tables.filter((table: any) => 
+        table.name.toLowerCase().includes(tableFilter.value.toLowerCase())
+    );
+});
+
+// Get columns for the selected table
+const selectedTableColumns = computed(() => {
+    if (!selectedTable.value || !dbStructure.value || !dbStructure.value.tables) return [];
+    
+    const table = dbStructure.value.tables.find((t: any) => t.name === selectedTable.value);
+    return table ? table.columns : [];
+});
+
+// Retry loading after an error
+const retryLoading = async () => {
+    hasError.value = false;
+    loading.value = true;
+    
+    try {
+        await loadDatabaseConnection();
+        if (hasConnection.value) {
+            await loadDatabaseStructure();
+        }
+    } catch (error) {
+        console.error('Failed to retry loading:', error);
+        hasError.value = true;
+        errorMessage.value = error instanceof Error 
+            ? `Error: ${error.message}` 
+            : 'Failed to connect to the database. Please check your connection.';
+        dbStructure.value = { tables: [] };
+    } finally {
+        loading.value = false;
+    }
+};
+
+// Initialize the page
+onMounted(async () => {
+    // Add a safety timeout to prevent endless loading
+    const timeout = setTimeout(() => {
+        if (loading.value) {
+            loading.value = false;
+            hasError.value = true;
+            errorMessage.value = 'Loading timed out. The database might be unavailable.';
+            dbStructure.value = { tables: [] };
+            console.error('Loading timed out');
+        }
+    }, 5 * 60 * 1000); // 5 minutes timeout
+    
+    try {
+        await loadDatabaseConnection();
+        if (hasConnection.value) {
+            await loadDatabaseStructure();
+        }
+    } catch (error) {
+        console.error('Failed to initialize database browser:', error);
+        hasError.value = true;
+        errorMessage.value = error instanceof Error 
+            ? `Error: ${error.message}` 
+            : 'Failed to load the database browser.';
+        dbStructure.value = { tables: [] };
+    } finally {
+        loading.value = false;
+        clearTimeout(timeout);
+    }
+});
+
+// Load database connection
+const loadDatabaseConnection = async () => {
+    try {
+        const connection = await GetDatabaseConnection();
+        if (connection && connection.ID) {
+            databaseConnection.value = connection;
+            hasConnection.value = true;
+        }
+    } catch (error) {
+        console.error('Failed to load database connection:', error);
+        hasConnection.value = false;
+    }
+};
+
+// Optimize query execution with cancellation support
+const executeQueryWithTimeout = async (query: string, timeout: number = 5 * 60 * 1000): Promise<any> => {
+    // Use AbortController for better cancellation control
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+        // Execute query with abort signal
+        const queryPromise = TestQueryInDatabase(databaseConnection.value, query, false);
+        
+        // Race between the query and the timeout
+        const result = await Promise.race<any>([
+            queryPromise,
+            new Promise<never>((_, reject) => 
+                setTimeout(() => reject(new Error('Query timed out')), timeout)
+            )
+        ]);
+        
+        clearTimeout(timeoutId);
+        return result;
+    } catch (error) {
+        console.error('Query execution error:', error);
+        throw error;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+};
+
+// Load database structure with better performance
+const loadDatabaseStructure = async (forceRefresh = false) => {
+    try {
+        // Check if we have a valid cached structure
+        const cacheKey = `${databaseConnection.value.Host}_${databaseConnection.value.Port}_${databaseConnection.value.Database}`;
+        const now = Date.now();
+        
+        // Use the cache if it exists, refresh is not forced, and it hasn't expired
+        if (!forceRefresh && 
+            structureCache.value[cacheKey] && 
+            (now - lastRefreshTime.value) < CACHE_TTL) {
+            console.log('Using cached database structure');
+            dbStructure.value = structureCache.value[cacheKey];
+            return;
+        }
+        
+        console.log('Fetching fresh database structure');
+        
+        // First try to load the most recent structure from the server's local cache
+        const cachedStructure = await GetLatestDatabaseStructure()
+            .catch(err => {
+                console.warn('Failed to load cached structure:', err);
+                return null;
+            });
+            
+        if (cachedStructure && cachedStructure.length > 0) {
+            try {
+                dbStructure.value = JSON.parse(cachedStructure);
+                structureCache.value[cacheKey] = dbStructure.value;
+                lastRefreshTime.value = now;
+                
+                // If refresh wasn't forced, use the cached structure and return
+                if (!forceRefresh) {
+                    return;
+                }
+                // If refresh was forced, continue and fetch updated structure
+            } catch (parseError) {
+                console.error('Failed to parse cached structure:', parseError);
+            }
+        }
+        
+        // Load structure with timeout
+        const structure = await Promise.race<string>([
+            GetDatabaseStructure(databaseConnection.value),
+            new Promise<string>((_, reject) => 
+                setTimeout(() => reject(new Error('Database structure loading timed out')), 5 * 60 * 1000)
+            )
+        ]);
+        
+        if (!structure) {
+            console.warn('No database structure returned');
+            dbStructure.value = { tables: [] };
+            return;
+        }
+        
+        try {
+            dbStructure.value = JSON.parse(structure);
+            structureCache.value[cacheKey] = dbStructure.value;
+            lastRefreshTime.value = now;
+        } catch (parseError) {
+            console.error('Failed to parse database structure:', parseError);
+            dbStructure.value = { tables: [] };
+        }
+    } catch (error) {
+        console.error('Failed to load database structure:', error);
+        dbStructure.value = { tables: [] };
+    }
+};
+
+// Refresh database structure
+const refreshStructure = async () => {
+    loading.value = true;
+    try {
+        await loadDatabaseStructure(true); // Forçar atualização
+        // Reset selected table if it no longer exists
+        if (selectedTable.value && dbStructure.value && dbStructure.value.tables && 
+            !dbStructure.value.tables.some((t: any) => t.name === selectedTable.value)) {
+            selectedTable.value = '';
+        }
+    } catch (error) {
+        console.error('Failed to refresh database structure:', error);
+        dbStructure.value = { tables: [] };
+    } finally {
+        loading.value = false;
+    }
+};
+
+// Select a table
+const selectTable = async (tableName: string) => {
+    // Limpar cache de dados de tabela ao mudar de tabela
+    if (selectedTable.value !== tableName) {
+        tableData.value = [];
+        tableColumns.value = [];
+        currentPage.value = 0;
+    }
+    
+    selectedTable.value = tableName;
+    activeTab.value = 'structure';
+    
+    // Pre-populate SQL query with SELECT statement
+    sqlQuery.value = `SELECT * FROM \`${tableName}\` LIMIT 100;`;
+    
+    // Load data if data tab is active or when tab becomes active
+    if (activeTab.value === 'data') {
+        await refreshTableData();
+    }
+};
+
+// Refresh table data with optimized query execution
+const refreshTableData = async (forceRefresh = false) => {
+    if (!selectedTable.value) return;
+    
+    const table = selectedTable.value;
+    const page = currentPage.value;
+    const limit = parseInt(rowLimit.value);
+    const cacheKey = `${databaseConnection.value.Database}_${table}`;
+    
+    // Use cached data if available and refresh is not forced
+    if (!forceRefresh && 
+        tableDataCache.value[cacheKey] && 
+        tableDataCache.value[cacheKey][page]) {
+        console.log(`Using cached data for ${table} page ${page}`);
+        tableData.value = tableDataCache.value[cacheKey][page];
+        if (tableData.value.length > 0) {
+            tableColumns.value = Object.keys(tableData.value[0]);
+        }
+        return;
+    }
+    
+    tableDataLoading.value = true;
+    
+    try {
+        // Get total row count in parallel (but only if we don't already have it)
+        if (!tableDataTotalRows.value[cacheKey]) {
+            const countQuery = `SELECT COUNT(*) AS total FROM \`${table}\``;
+            executeQueryWithTimeout(countQuery)
+                .then(countResult => {
+                    if (countResult && countResult.length > 0 && countResult[0].total !== undefined) {
+                        tableDataTotalRows.value[cacheKey] = parseInt(countResult[0].total);
+                    }
+                })
+                .catch(err => console.warn('Failed to get row count:', err));
+        }
+        
+        // Build optimized query
+        let query = `SELECT * FROM \`${table}\` LIMIT ${limit} OFFSET ${page * limit}`;
+        
+        // Optimization for large tables
+        if (dbStructure.value && dbStructure.value.tables) {
+            const tableInfo = dbStructure.value.tables.find((t: any) => t.name === table);
+            if (tableInfo && tableInfo.columns && tableInfo.columns.length > 15) {
+                // For tables with many columns, select only the first 15
+                // and add ID/primary key if available
+                const primaryKey = tableInfo.columns.find((c: any) => c.isPrimary)?.name;
+                const selectedColumns = tableInfo.columns.slice(0, 15).map((c: any) => `\`${c.name}\``);
+                
+                if (primaryKey && !selectedColumns.includes(`\`${primaryKey}\``)) {
+                    selectedColumns.unshift(`\`${primaryKey}\``);
+                }
+                
+                query = `SELECT ${selectedColumns.join(', ')} FROM \`${table}\` LIMIT ${limit} OFFSET ${page * limit}`;
+            }
+        }
+        
+        // Execute query with timeout handling
+        const result = await executeQueryWithTimeout(query);
+        
+        if (result && Array.isArray(result) && result.length > 0) {
+            tableData.value = result;
+            tableColumns.value = Object.keys(result[0]);
+            
+            // Store in cache
+            if (!tableDataCache.value[cacheKey]) {
+                tableDataCache.value[cacheKey] = {};
+            }
+            tableDataCache.value[cacheKey][page] = result;
+        } else {
+            tableData.value = [];
+            tableColumns.value = [];
+        }
+    } catch (error) {
+        console.error('Failed to load table data:', error);
+        tableData.value = [];
+        tableColumns.value = [];
+    } finally {
+        tableDataLoading.value = false;
+    }
+};
+
+// Computed to check if there are more pages
+const hasMorePages = computed(() => {
+    // If no table is selected, there are no more pages
+    if (!selectedTable.value) {
+        return false;
+    }
+    
+    const cacheKey = `${databaseConnection.value.Database}_${selectedTable.value}`;
+    const limit = parseInt(rowLimit.value);
+    
+    // If we know the total number of rows in the table
+    if (tableDataTotalRows.value[cacheKey]) {
+        const totalRows = tableDataTotalRows.value[cacheKey];
+        const currentRows = (currentPage.value + 1) * limit;
+        return currentRows < totalRows;
+    }
+    
+    // Otherwise, check if the current page has the maximum number of rows
+    return tableData.value.length >= limit;
+});
+
+// Load previous page
+const loadPreviousPage = async () => {
+    if (currentPage.value > 0) {
+        currentPage.value -= 1;
+        await refreshTableData();
+    }
+};
+
+// Load next page
+const loadNextPage = async () => {
+    // Verificar se tem mais páginas antes de carregar a próxima
+    const canLoadMore = hasMorePages.value;
+    
+    if (canLoadMore) {
+        currentPage.value += 1;
+        await refreshTableData();
+    }
+};
+
+// Execute custom SQL query
+const executeCustomQuery = async () => {
+    if (!sqlQuery.value.trim()) return;
+    
+    sqlQueryLoading.value = true;
+    try {
+        // Check if it's a multi-query (separated by semicolons)
+        const queries = sqlQuery.value
+            .split(';')
+            .map(q => q.trim())
+            .filter(q => q.length > 0);
+        
+        const results = [];
+        
+        for (const query of queries) {
+            try {
+                // Add a safety timeout for each query
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Query timed out')), 5 * 60 * 1000)
+                );
+                
+                const queryPromise = TestQueryInDatabase(databaseConnection.value, query, false);
+                
+                // Race between the query and the timeout
+                const result = await Promise.race([queryPromise, timeoutPromise]);
+                results.push(result);
+            } catch (error) {
+                console.error(`Error executing query: ${query}`, error);
+                // Add a message to show the user that the query failed
+                results.push([{ error: error instanceof Error ? error.message : 'Query execution failed' }]);
+            }
+        }
+        
+        sqlQueryResults.value = results;
+    } catch (error) {
+        console.error('Failed to execute SQL query:', error);
+        sqlQueryResults.value = [];
+    } finally {
+        sqlQueryLoading.value = false;
+    }
+};
+
+// Observe mudanças na conexão de banco e recarregue a estrutura quando necessário
+watch(() => databaseConnection.value, (newConn, oldConn) => {
+    if (newConn.ID !== oldConn.ID || 
+        newConn.Host !== oldConn.Host || 
+        newConn.Port !== oldConn.Port || 
+        newConn.Database !== oldConn.Database) {
+        loadDatabaseStructure(true);
+    }
+}, { deep: true });
+
+// Observar mudanças na guia ativa
+watch(() => activeTab.value, async (newTab) => {
+    if (newTab === 'data' && selectedTable.value && tableData.value.length === 0) {
+        await refreshTableData();
+    }
+});
+</script> 
