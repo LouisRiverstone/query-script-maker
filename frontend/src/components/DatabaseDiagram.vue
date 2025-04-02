@@ -1,74 +1,147 @@
 <template>
   <div class="database-diagram-container">
-    <div class="diagram-header">
-      <div class="diagram-controls">
-        <Button type="button" @click="zoomIn" class="mr-1">+</Button>
-        <Button type="button" @click="zoomOut" class="mr-1">-</Button>
-        <Button type="button" @click="fitView">Fit</Button>
-      </div>
-    </div>
-    <div ref="diagramContainer" class="diagram-content bg-white dark:bg-gray-800 rounded-lg p-4 h-[70vh]">
-      <VueFlow v-if="nodes.length > 0"
-        :default-zoom="1"
-        :min-zoom="0.2"
-        :max-zoom="4"
-        :nodes="nodes"
-        :edges="edges"
-        class="vue-flow-wrapper h-full"
-        fit-view-on-init
-      >
-        <!-- Custom Node Types -->
-        <template #node-table="nodeProps">
-          <div class="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2">
-            <div class="table-header bg-indigo-100 dark:bg-indigo-900 p-2 mb-2 rounded font-bold text-center">
-              {{ nodeProps.data.label }}
-            </div>
-            <div class="table-columns">
-              <div v-for="(column, index) in nodeProps.data.columns" :key="index" 
-                class="column-item flex items-center p-1 border-b border-gray-200 dark:border-gray-700 last:border-0"
-                :class="{'bg-yellow-50 dark:bg-yellow-900': column.isPrimary}">
-                <div class="flex items-center">
-                  <span v-if="column.isPrimary" class="text-yellow-600 dark:text-yellow-400 mr-1">🔑</span>
-                  <span v-else-if="column.isForeign" class="text-blue-600 dark:text-blue-400 mr-1">🔗</span>
-                  <span v-else class="mr-1 w-3.5"></span>
+    <div class="flex flex-row h-full">
+      <!-- Table List Sidebar -->
+      <div class="w-72 flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
+        <h3 class="font-semibold text-gray-700 dark:text-gray-300 p-3 border-b border-gray-200 dark:border-gray-700">
+          Tables ({{ nodes.length }})
+        </h3>
+        <div class="overflow-y-auto flex-1 p-2 bg-white dark:bg-gray-800">
+          <div class="space-y-1">
+            <div v-for="node in nodes" :key="node.id" class="table-list-item mb-3">
+              <div 
+                class="cursor-pointer p-2 text-sm rounded-md bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
+                :class="{'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-600': selectedTable === node.id}"
+                @click="focusNode(node.id)"
+              >
+                <div class="font-medium text-gray-800 dark:text-gray-200 flex items-center">
+                  <span class="text-indigo-600 dark:text-indigo-400 mr-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                    </svg>
+                  </span>
+                  {{ node.data.label }}
+                  <span class="ml-1 text-xs text-gray-500 dark:text-gray-400">({{ node.data.columns.length }})</span>
                 </div>
-                <div class="flex-1 text-left whitespace-nowrap pr-2">{{ column.name }}</div>
-                <div class="text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap">{{ column.type }}</div>
+                
+                <!-- Column list -->
+                <div class="mt-2 ml-2 space-y-0.5 max-h-60 overflow-y-auto border-l-2 border-gray-200 dark:border-gray-600 pl-2">
+                  <div 
+                    v-for="column in node.data.columns" 
+                    :key="`${node.id}-${column.name}`"
+                    class="text-xs p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 cursor-pointer transition-colors flex flex-col bg-transparent dark:bg-transparent"
+                    :class="{
+                      'bg-indigo-50 dark:bg-indigo-900/30': selectedColumn === column.name && selectedTable === node.id
+                    }"
+                    @click.stop="focusNodeColumn(node.id, column.name)"
+                  >
+                    <div class="flex items-center">
+                      <span v-if="column.isPrimary" class="text-yellow-600 dark:text-yellow-400 mr-1" title="Primary Key">🔑</span>
+                      <span v-else-if="column.isForeign" class="text-blue-600 dark:text-blue-400 mr-1" title="Foreign Key">🔗</span>
+                      <span v-else class="mr-1 w-3.5"></span>
+                      <span class="font-medium text-gray-700 dark:text-gray-300">{{ column.name }}</span>
+                    </div>
+                    <div class="flex items-center mt-0.5 ml-4 text-gray-500 dark:text-gray-400">
+                      <span class="inline-block px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">{{ column.type }}</span>
+                      <span v-if="column.nullable === 'YES'" class="ml-1 text-[10px]">nullable</span>
+                      <span v-if="column.default" class="ml-1 text-[10px]" title="Default value">
+                        default: {{ column.default.length > 10 ? column.default.substring(0, 10) + '...' : column.default }}
+                      </span>
+                    </div>
+                    <div v-if="column.extra" class="ml-4 text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">
+                      {{ column.extra }}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </template>
-        
-        <!-- Add background pattern -->
-        <Background 
-          :pattern-color="'#aaa'" 
-          :gap="24"
-          :variant="isDarkMode ? 'dots' : 'lines'" 
-        />
-        
-        <!-- Add Controls -->
-        <Controls />
-        
-        <!-- Add Minimap -->
-        <MiniMap :node-color="getNodeColor" />
-        
-        <!-- Add panel with legend -->
-        <Panel :position="'top-right'" class="legend-panel">
-          <div class="legend bg-white dark:bg-gray-700 p-2 rounded shadow-md">
-            <h4 class="text-sm font-semibold text-gray-700 dark:text-white mb-1">Legend</h4>
-            <div class="legend-item flex items-center mb-1">
-              <div class="w-3 h-3 bg-yellow-500 dark:bg-yellow-400 rounded-sm mr-2"></div>
-              <span class="text-xs text-gray-600 dark:text-gray-300">Primary Key</span>
-            </div>
-            <div class="legend-item flex items-center">
-              <div class="w-3 h-3 bg-blue-500 dark:bg-blue-400 rounded-sm mr-2"></div>
-              <span class="text-xs text-gray-600 dark:text-gray-300">Foreign Key</span>
-            </div>
+        </div>
+      </div>
+      
+      <!-- Diagram Content -->
+      <div class="flex-1 flex flex-col overflow-hidden">
+        <div class="diagram-header p-2 border-b border-gray-200 dark:border-gray-700">
+          <div class="diagram-controls">
+            <Button type="button" @click="zoomIn" class="mr-1">+</Button>
+            <Button type="button" @click="zoomOut" class="mr-1">-</Button>
+            <Button type="button" @click="fitView">Fit</Button>
           </div>
-        </Panel>
-      </VueFlow>
-      <div v-else class="empty-diagram flex items-center justify-center h-full">
-        <p class="text-gray-500 dark:text-gray-400 text-center">No database structure found</p>
+        </div>
+        <div ref="diagramContainer" class="diagram-content flex-1 bg-white dark:bg-gray-800 rounded-lg p-2 overflow-hidden">
+          <VueFlow v-if="nodes.length > 0"
+            :default-zoom="1"
+            :min-zoom="0.2"
+            :max-zoom="4"
+            :nodes="nodes"
+            :edges="edges"
+            class="vue-flow-wrapper h-full"
+            fit-view-on-init
+            @node-click="onNodeClick"
+          >
+            <!-- Custom Node Types -->
+            <template #node-table="nodeProps">
+              <div 
+                class="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-2"
+                :class="{'ring-2 ring-indigo-500 dark:ring-indigo-400': selectedTable === nodeProps.id}"
+              >
+                <div class="table-header bg-indigo-100 dark:bg-indigo-900 p-2 mb-2 rounded font-bold text-center">
+                  {{ nodeProps.data.label }}
+                </div>
+                <div class="table-columns">
+                  <div 
+                    v-for="(column, index) in nodeProps.data.columns" 
+                    :key="index" 
+                    class="column-item flex items-center p-1 border-b border-gray-200 dark:border-gray-700 last:border-0"
+                    :class="{
+                      'bg-yellow-50 dark:bg-yellow-900': column.isPrimary,
+                      'bg-indigo-50 dark:bg-indigo-900/30': selectedColumn === column.name && selectedTable === nodeProps.id
+                    }"
+                  >
+                    <div class="flex items-center">
+                      <span v-if="column.isPrimary" class="text-yellow-600 dark:text-yellow-400 mr-1">🔑</span>
+                      <span v-else-if="column.isForeign" class="text-blue-600 dark:text-blue-400 mr-1">🔗</span>
+                      <span v-else class="mr-1 w-3.5"></span>
+                    </div>
+                    <div class="flex-1 text-left whitespace-nowrap pr-2">{{ column.name }}</div>
+                    <div class="text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap">{{ column.type }}</div>
+                  </div>
+                </div>
+              </div>
+            </template>
+            
+            <!-- Add background pattern -->
+            <Background 
+              :pattern-color="'#aaa'" 
+              :gap="24"
+              :variant="isDarkMode ? 'dots' : 'lines'" 
+            />
+            
+            <!-- Add Controls -->
+            <Controls />
+            
+            <!-- Add Minimap -->
+            <MiniMap :node-color="getNodeColor" />
+            
+            <!-- Add panel with legend -->
+            <Panel :position="'top-right'" class="legend-panel">
+              <div class="legend bg-white dark:bg-gray-700 p-2 rounded shadow-md">
+                <h4 class="text-sm font-semibold text-gray-700 dark:text-white mb-1">Legend</h4>
+                <div class="legend-item flex items-center mb-1">
+                  <div class="w-3 h-3 bg-yellow-500 dark:bg-yellow-400 rounded-sm mr-2"></div>
+                  <span class="text-xs text-gray-600 dark:text-gray-300">Primary Key</span>
+                </div>
+                <div class="legend-item flex items-center">
+                  <div class="w-3 h-3 bg-blue-500 dark:bg-blue-400 rounded-sm mr-2"></div>
+                  <span class="text-xs text-gray-600 dark:text-gray-300">Foreign Key</span>
+                </div>
+              </div>
+            </Panel>
+          </VueFlow>
+          <div v-else class="empty-diagram flex items-center justify-center h-full">
+            <p class="text-gray-500 dark:text-gray-400 text-center">No database structure found</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -83,7 +156,9 @@ import {
   Panel,
   Node,
   Edge,
-  MarkerType
+  MarkerType,
+  NodeMouseEvent,
+  useZoomPanHelper
 } from '@vue-flow/core';
 import '@vue-flow/core/dist/style.css';
 import '@vue-flow/core/dist/theme-default.css';
@@ -130,14 +205,24 @@ interface DatabaseStructure {
 
 const props = defineProps<{
   databaseStructure: string;
+  isDarkMode?: boolean;
 }>();
 
 const diagramContainer = ref<HTMLElement | null>(null);
-const isDarkMode = ref(false);
+const localIsDarkMode = ref(false);
+
+// Use the provided isDarkMode prop if available, otherwise detect it locally
+const isDarkMode = computed(() => {
+  return props.isDarkMode !== undefined ? props.isDarkMode : localIsDarkMode.value;
+});
 
 // Elements for Vue Flow
 const nodes = ref<any[]>([]);
 const edges = ref<any[]>([]);
+
+// Selected table/column tracking
+const selectedTable = ref<string | null>(null);
+const selectedColumn = ref<string | null>(null);
 
 // Get Vue Flow instance
 const { zoomIn, zoomOut, fitView } = useVueFlow({
@@ -145,16 +230,54 @@ const { zoomIn, zoomOut, fitView } = useVueFlow({
   edges: []
 });
 
+// Get zoom pan helper for custom focus
+const { setCenter } = useZoomPanHelper();
+
+// Function to focus on a specific node
+const focusNode = (nodeId: string) => {
+  const node = nodes.value.find(node => node.id === nodeId);
+  if (node) {
+    // Select the table
+    selectedTable.value = nodeId;
+    selectedColumn.value = null;
+    
+    // Center the view on the node with zoom
+    const x = node.position.x + node.style.width / 2;
+    const y = node.position.y + 100; // Add some offset for better centering
+    
+    setCenter(x, y, { zoom: 1.5, duration: 800 });
+  }
+};
+
+// Function to focus on a specific column within a node
+const focusNodeColumn = (nodeId: string, columnName: string) => {
+  // Select the table and column
+  selectedTable.value = nodeId;
+  selectedColumn.value = columnName;
+  
+  // First focus the node
+  focusNode(nodeId);
+};
+
+// Handle node click in the diagram
+const onNodeClick = (event: NodeMouseEvent) => {
+  const nodeId = event.node.id as string;
+  focusNode(nodeId);
+};
+
 // Function to check if dark mode is enabled
 const updateDarkMode = () => {
-  isDarkMode.value = document.documentElement.classList.contains('dark') || 
-                   document.body.classList.contains('dark') ||
-                   window.matchMedia('(prefers-color-scheme: dark)').matches;
+  localIsDarkMode.value = document.documentElement.classList.contains('dark') || 
+                  document.body.classList.contains('dark') ||
+                  window.matchMedia('(prefers-color-scheme: dark)').matches;
 };
 
 // Node color function for minimap
 const getNodeColor = (node: Node) => {
-  return '#4f46e5'; // Default indigo color
+  if (node.id === selectedTable.value) {
+    return '#4f46e5'; // Highlight selected table
+  }
+  return '#6b7280'; // Default gray color
 };
 
 // Parse database structure and create diagram
@@ -235,6 +358,10 @@ const parseDbStructure = (structureStr: string) => {
     
     nodes.value = positionedNodes;
     edges.value = diagramEdges;
+    
+    // Reset selection
+    selectedTable.value = null;
+    selectedColumn.value = null;
   } catch (error) {
     console.error('Error parsing database structure:', error);
     nodes.value = [];
@@ -301,6 +428,14 @@ onUnmounted(() => {
 watch(() => props.databaseStructure, (newValue) => {
   parseDbStructure(newValue);
 }, { immediate: true });
+
+// Watch for dark mode changes from parent
+watch(() => props.isDarkMode, (newValue) => {
+  if (newValue !== undefined) {
+    // If the parent is controlling dark mode, we don't need to update it locally
+    // This prevents conflicts between parent and local dark mode detection
+  }
+});
 </script>
 
 <style scoped>
@@ -313,11 +448,9 @@ watch(() => props.databaseStructure, (newValue) => {
 .diagram-header {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 8px;
 }
 
 .diagram-content {
-  flex-grow: 1;
   position: relative;
 }
 
@@ -329,5 +462,19 @@ watch(() => props.databaseStructure, (newValue) => {
 :deep(.vue-flow__minimap) {
   transform: scale(0.8);
   transform-origin: bottom right;
+}
+
+.table-list-item {
+  transition: all 0.2s ease;
+}
+
+/* Define a custom dark mode bg-gray-750 color for consistent styling */
+.dark .bg-gray-750 {
+  background-color: #242937;
+}
+
+/* Fix any background issues for columns */
+.dark .table-columns .column-item {
+  background-color: transparent;
 }
 </style> 
