@@ -58,16 +58,16 @@ export function ReadXLSXFile() {
   return window['go']['main']['App']['ReadXLSXFile']();
 }
 
-export function TestBatchQueryInDatabase(arg1, arg2) {
-  return window['go']['main']['App']['TestBatchQueryInDatabase'](arg1, arg2);
+export function TestBatchQueryInDatabase(arg1, arg2, arg3) {
+  return window['go']['main']['App']['TestBatchQueryInDatabase'](arg1, arg2, arg3);
 }
 
 export function TestDatabaseConnection(arg1) {
   return window['go']['main']['App']['TestDatabaseConnection'](arg1);
 }
 
-export function TestQueryInDatabase(arg1, arg2) {
-  return window['go']['main']['App']['TestQueryInDatabase'](arg1, arg2);
+export function TestQueryInDatabase(arg1, arg2, arg3) {
+  return window['go']['main']['App']['TestQueryInDatabase'](arg1, arg2, arg3);
 }
 
 export function UpdateQuery(arg1, arg2) {

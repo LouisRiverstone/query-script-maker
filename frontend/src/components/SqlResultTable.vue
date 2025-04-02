@@ -9,6 +9,9 @@
                         <path fill-rule="evenodd" d="M10 4a1 1 0 100 2 1 1 0 000-2zM8.5 8.5a1.5 1.5 0 113 0v4a1.5 1.5 0 11-3 0v-4z" clip-rule="evenodd" />
                     </svg>
                     SQL Results <span class="text-sm text-gray-500 dark:text-gray-400 font-normal ml-2">({{ totalRows }} rows)</span>
+                    <span v-if="transactionMode" class="text-xs bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full ml-2">
+                        Transaction Mode (Rollback)
+                    </span>
                 </h2>
                 <button @click="close" class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -75,7 +78,8 @@ import Table from './Table.vue';
 import { ref, computed, onMounted } from 'vue';
 
 const props = defineProps<{
-    data: { [key: string]: any }[][]
+    data: { [key: string]: any }[][],
+    transactionMode?: boolean
 }>();
 
 const emit = defineEmits(['close']);

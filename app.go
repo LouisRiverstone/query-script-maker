@@ -592,31 +592,42 @@ func (a *App) ExportDatabaseFile() error {
 	return nil
 }
 
-func (a *App) TestQueryInDatabase(input DatabaseConnection, query string) ([]map[string]interface{}, error) {
+func (a *App) TestQueryInDatabase(input DatabaseConnection, query string, useTransaction bool) ([]map[string]interface{}, error) {
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", input.Username, input.Password, input.Host, input.Port, input.Database))
-
 	if err != nil {
 		return nil, err
 	}
-
 	defer db.Close()
 
-	rows, err := db.Query(query)
+	// Begin transaction if requested
+	var tx *sql.Tx
+	if useTransaction {
+		tx, err = db.Begin()
+		if err != nil {
+			return nil, fmt.Errorf("failed to start transaction: %w", err)
+		}
+		defer tx.Rollback() // Always rollback to ensure no changes are committed
+	}
+
+	// Execute query based on whether we're in a transaction
+	var rows *sql.Rows
+	if useTransaction {
+		rows, err = tx.Query(query)
+	} else {
+		rows, err = db.Query(query)
+	}
 
 	if err != nil {
 		return nil, err
 	}
-
 	defer rows.Close()
 
 	columns, err := rows.Columns()
-
 	if err != nil {
 		return nil, err
 	}
 
 	var result []map[string]interface{}
-
 	for rows.Next() {
 		values := make([]interface{}, len(columns))
 		valuePtrs := make([]interface{}, len(columns))
@@ -626,16 +637,13 @@ func (a *App) TestQueryInDatabase(input DatabaseConnection, query string) ([]map
 		}
 
 		err = rows.Scan(valuePtrs...)
-
 		if err != nil {
 			return nil, err
 		}
 
 		row := make(map[string]interface{})
-
 		for i, col := range columns {
 			val := values[i]
-
 			switch v := val.(type) {
 			case []byte:
 				row[col] = string(v)
@@ -650,15 +658,80 @@ func (a *App) TestQueryInDatabase(input DatabaseConnection, query string) ([]map
 	return result, nil
 }
 
-func (a *App) TestBatchQueryInDatabase(input DatabaseConnection, queries []string) ([][]map[string]interface{}, error) {
+func (a *App) TestBatchQueryInDatabase(input DatabaseConnection, queries []string, useTransaction bool) ([][]map[string]interface{}, error) {
+	if len(queries) == 0 {
+		return [][]map[string]interface{}{}, nil
+	}
+
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", input.Username, input.Password, input.Host, input.Port, input.Database))
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
 	var results [][]map[string]interface{}
 
-	for _, query := range queries {
-		rows, err := a.TestQueryInDatabase(input, query)
+	// Begin transaction if requested
+	if useTransaction {
+		tx, err := db.Begin()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to start transaction: %w", err)
 		}
-		results = append(results, rows)
+		defer tx.Rollback() // Always rollback to ensure no changes are committed
+
+		// Execute each query within the same transaction
+		for _, query := range queries {
+			rows, err := tx.Query(query)
+			if err != nil {
+				return nil, err
+			}
+
+			columns, err := rows.Columns()
+			if err != nil {
+				rows.Close()
+				return nil, err
+			}
+
+			var result []map[string]interface{}
+			for rows.Next() {
+				values := make([]interface{}, len(columns))
+				valuePtrs := make([]interface{}, len(columns))
+
+				for i := range columns {
+					valuePtrs[i] = &values[i]
+				}
+
+				err = rows.Scan(valuePtrs...)
+				if err != nil {
+					rows.Close()
+					return nil, err
+				}
+
+				row := make(map[string]interface{})
+				for i, col := range columns {
+					val := values[i]
+					switch v := val.(type) {
+					case []byte:
+						row[col] = string(v)
+					default:
+						row[col] = v
+					}
+				}
+
+				result = append(result, row)
+			}
+			rows.Close()
+			results = append(results, result)
+		}
+	} else {
+		// Run each query individually without transaction
+		for _, query := range queries {
+			rows, err := a.TestQueryInDatabase(input, query, false)
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, rows)
+		}
 	}
 
 	return results, nil

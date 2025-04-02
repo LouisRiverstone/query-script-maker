@@ -56,6 +56,15 @@
                                             class="text-sm font-medium text-gray-700 dark:text-gray-300">
                                             Minify Output
                                         </label>
+                                        
+                                        <input type="checkbox" id="useTransaction" v-model="useTransaction" class="ml-4 w-4 h-4 text-indigo-600 bg-gray-100 border-gray-300 rounded 
+                                            focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 
+                                            dark:ring-offset-gray-800 focus:ring-2 dark:focus:ring-indigo-600 
+                                            checked:bg-indigo-500 hover:border-indigo-400 transition-colors" />
+                                        <label for="useTransaction"
+                                            class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Use Transaction (Rollback)
+                                        </label>
                                     </div>
 
                                     <div class="flex flex-wrap md:flex-row flex-col gap-2 justify-end">
@@ -101,7 +110,7 @@
                 </div>
             </section>
         </Steps>
-        <SqlResultTable :data="responseTest" v-model="showSqlTable" />
+        <SqlResultTable :data="responseTest" v-model="showSqlTable" :transaction-mode="useTransaction" />
         <SqlVisualizerModal :isOpen="showSqlVisualizer" :initialQuery="query" :databaseStructure="databaseStructure" @close="closeSqlVisualizer" />
         <DatabaseDiagramModal :isOpen="showDatabaseDiagram" :databaseStructure="databaseStructure"
             @close="closeDatabaseDiagram" @refresh="refreshDatabaseDiagram" />
@@ -136,6 +145,7 @@ const query = ref<string>('SELECT * from family limit 1;');
 const showSqlTable = ref<boolean>(false);
 const showSqlVisualizer = ref<boolean>(false);
 const minify = ref<boolean>(false);
+const useTransaction = ref<boolean>(true);
 const showDatabaseDiagram = ref<boolean>(false);
 const databaseStructure = ref<string>('');
 const loadingDatabaseStructure = ref<boolean>(false);
@@ -278,7 +288,7 @@ const testSQL = async (query: string) => {
         }
 
         responseTest.value = []
-        responseTest.value = [(await TestQueryInDatabase(databaseConnection.value!, query))]
+        responseTest.value = [(await TestQueryInDatabase(databaseConnection.value!, query, useTransaction.value))]
 
         showSqlTable.value = true
     } catch (error) {
@@ -295,7 +305,7 @@ const testBatchSQL = async (query: string) => {
         const queries = query.replaceAll("\n", "").split(';').filter((query) => query.trim() !== '').map((query) => `${query};`);
 
         responseTest.value = []
-        responseTest.value = (await TestBatchQueryInDatabase(databaseConnection.value!, queries))
+        responseTest.value = (await TestBatchQueryInDatabase(databaseConnection.value!, queries, useTransaction.value))
 
         showSqlTable.value = true
     } catch (error) {
