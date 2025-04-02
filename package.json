@@ -3,6 +3,7 @@
     "@vue-flow/background": "^1.3.2",
     "@vue-flow/controls": "^1.1.2",
     "@vue-flow/core": "^1.42.5",
-    "@vue-flow/minimap": "^1.5.3"
+    "@vue-flow/minimap": "^1.5.3",
+    "dagre": "^0.8.5"
   }
 }

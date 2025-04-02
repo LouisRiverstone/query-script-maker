@@ -60,9 +60,14 @@
 
                                     <div class="flex flex-wrap md:flex-row flex-col gap-2 justify-end">
                                         <div class="flex flex-wrap md:flex-row flex-col gap-2 px-2 md:px-0">
-                                            <Button type="button" @click="openSqlVisualizer"
-                                                class="bg-purple-600 hover:bg-purple-700">
+                                            <Button type="button" @click="openSqlVisualizer">
                                                 Visualize SQL
+                                            </Button>
+                                            <Button v-if="databaseConnection && databaseConnection.ID !== 0"
+                                                type="button" @click="openDatabaseDiagram"
+                                                :disabled="loadingDatabaseStructure"
+                                                :loading="loadingDatabaseStructure">
+                                                View DB Diagram
                                             </Button>
                                         </div>
                                         <div v-if="!loadingDatabaseConnection"
@@ -74,8 +79,10 @@
                                                 type="button" @click="testOutputSql"
                                                 class="bg-blue-700 hover:bg-blue-800">Test Output SQL</Button>
                                         </div>
-                                        <div v-if="hasEditor" class="flex flex-wrap md:flex-row flex-col gap-2 px-2 md:px-0">
-                                            <Button type="button" @click="createSqlFile" class="bg-green-600 hover:bg-green-700">Save .SQL</Button>
+                                        <div v-if="hasEditor"
+                                            class="flex flex-wrap md:flex-row flex-col gap-2 px-2 md:px-0">
+                                            <Button type="button" @click="createSqlFile"
+                                                class="bg-green-600 hover:bg-green-700">Save .SQL</Button>
                                         </div>
                                         <div v-if="loadingDatabaseConnection" class="flex justify-center">
                                             <Loader />
@@ -93,6 +100,8 @@
         </Steps>
         <SqlResultTable :data="responseTest" v-model="showSqlTable" />
         <SqlVisualizerModal :isOpen="showSqlVisualizer" :initialQuery="query" @close="closeSqlVisualizer" />
+        <DatabaseDiagramModal :isOpen="showDatabaseDiagram" :databaseStructure="databaseStructure"
+            @close="closeDatabaseDiagram" @refresh="refreshDatabaseDiagram" />
     </div>
 </template>
 
@@ -100,7 +109,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { asyncComputed } from '@vueuse/core';
 
-import { ReadXLSXFile, CreateSQLFile, GetQueriesList, GetDatabaseConnection, TestQueryInDatabase, TestBatchQueryInDatabase, MakeBindedSQL } from '../../wailsjs/go/main/App'
+import { ReadXLSXFile, CreateSQLFile, GetQueriesList, GetDatabaseConnection, TestQueryInDatabase, TestBatchQueryInDatabase, MakeBindedSQL, GetLatestDatabaseStructure } from '../../wailsjs/go/main/App'
 import { main } from '../../wailsjs/go/models';
 
 import Table from '../components/Table.vue';
@@ -112,6 +121,7 @@ import Dropdown from '../components/Dropdown.vue';
 import Loader from '../components/Loader.vue';
 import SqlResultTable from '../components/SqlResultTable.vue';
 import SqlVisualizerModal from '../components/SqlVisualizerModal.vue';
+import DatabaseDiagramModal from '../components/DatabaseDiagramModal.vue';
 
 const loading = ref<boolean>(false);
 const loadingSheet = ref<boolean>(false);
@@ -123,6 +133,9 @@ const query = ref<string>('SELECT * from family limit 1;');
 const showSqlTable = ref<boolean>(false);
 const showSqlVisualizer = ref<boolean>(false);
 const minify = ref<boolean>(false);
+const showDatabaseDiagram = ref<boolean>(false);
+const databaseStructure = ref<string>('');
+const loadingDatabaseStructure = ref<boolean>(false);
 
 const selectedQueryId = ref<string>("TESTE")
 const queries = ref<Array<main.Query>>([])
@@ -293,6 +306,39 @@ const openSqlVisualizer = () => {
 
 const closeSqlVisualizer = () => {
     showSqlVisualizer.value = false;
+};
+
+const openDatabaseDiagram = async () => {
+    try {
+        loadingDatabaseStructure.value = true;
+        databaseStructure.value = await GetLatestDatabaseStructure();
+        showDatabaseDiagram.value = true;
+    } catch (error) {
+        console.error('Error fetching database structure:', error);
+        alert('Failed to load database structure. Please try again.');
+    } finally {
+        loadingDatabaseStructure.value = false;
+    }
+};
+
+const closeDatabaseDiagram = () => {
+    showDatabaseDiagram.value = false;
+};
+
+const refreshDatabaseDiagram = async (newStructure: string) => {
+    if (newStructure) {
+        databaseStructure.value = newStructure;
+    } else {
+        try {
+            loadingDatabaseStructure.value = true;
+            databaseStructure.value = await GetLatestDatabaseStructure();
+        } catch (error) {
+            console.error('Error refreshing database structure:', error);
+            alert('Failed to refresh database structure. Please try again.');
+        } finally {
+            loadingDatabaseStructure.value = false;
+        }
+    }
 };
 
 const mount = async () => {

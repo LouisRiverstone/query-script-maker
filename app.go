@@ -719,6 +719,12 @@ func createSqliteTables() {
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			deleted_at TIMESTAMP DEFAULT NULL
 		);
+
+		CREATE TABLE IF NOT EXISTS database_structure (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			structure TEXT NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);
 	`
 	_, err := db.Exec(createTableSQL)
 
@@ -760,4 +766,174 @@ func (a *App) CheckHasUpdate() bool {
 	latestVersion := versionData["version"].(string)
 
 	return latestVersion > version
+}
+
+func (a *App) GetDatabaseStructure(input DatabaseConnection) (string, error) {
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", input.Username, input.Password, input.Host, input.Port, input.Database))
+
+	if err != nil {
+		return "", err
+	}
+
+	defer db.Close()
+
+	// Get all tables
+	tableRows, err := db.Query("SHOW TABLES")
+	if err != nil {
+		return "", err
+	}
+	defer tableRows.Close()
+
+	type Column struct {
+		Name      string `json:"name"`
+		Type      string `json:"type"`
+		Nullable  string `json:"nullable"`
+		Key       string `json:"key"`
+		Default   string `json:"default"`
+		Extra     string `json:"extra"`
+		IsPrimary bool   `json:"isPrimary"`
+	}
+
+	type ForeignKey struct {
+		ColumnName       string `json:"columnName"`
+		ReferencedTable  string `json:"referencedTable"`
+		ReferencedColumn string `json:"referencedColumn"`
+		ConstraintName   string `json:"constraintName"`
+	}
+
+	type Table struct {
+		Name        string       `json:"name"`
+		Columns     []Column     `json:"columns"`
+		ForeignKeys []ForeignKey `json:"foreignKeys"`
+	}
+
+	type DatabaseStructure struct {
+		Tables []Table `json:"tables"`
+	}
+
+	structure := DatabaseStructure{
+		Tables: []Table{},
+	}
+
+	// Collect all tables
+	var tables []string
+	for tableRows.Next() {
+		var tableName string
+		if err := tableRows.Scan(&tableName); err != nil {
+			return "", err
+		}
+		tables = append(tables, tableName)
+	}
+
+	// For each table, get columns and foreign keys
+	for _, tableName := range tables {
+		table := Table{
+			Name:        tableName,
+			Columns:     []Column{},
+			ForeignKeys: []ForeignKey{},
+		}
+
+		// Get columns
+		columnRows, err := db.Query(fmt.Sprintf("DESCRIBE `%s`", tableName))
+		if err != nil {
+			return "", err
+		}
+
+		for columnRows.Next() {
+			var col Column
+			var field, colType, null, key, defaultVal, extra sql.NullString
+			if err := columnRows.Scan(&field, &colType, &null, &key, &defaultVal, &extra); err != nil {
+				columnRows.Close()
+				return "", err
+			}
+
+			col.Name = field.String
+			col.Type = colType.String
+			col.Nullable = null.String
+			col.Key = key.String
+			col.Default = defaultVal.String
+			col.Extra = extra.String
+			col.IsPrimary = key.String == "PRI"
+
+			table.Columns = append(table.Columns, col)
+		}
+		columnRows.Close()
+
+		// Get foreign keys
+		fkQuery := `
+		SELECT 
+			COLUMN_NAME, 
+			REFERENCED_TABLE_NAME, 
+			REFERENCED_COLUMN_NAME,
+			CONSTRAINT_NAME
+		FROM 
+			INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+		WHERE 
+			TABLE_SCHEMA = ? 
+			AND TABLE_NAME = ? 
+			AND REFERENCED_TABLE_NAME IS NOT NULL
+		`
+		fkRows, err := db.Query(fkQuery, input.Database, tableName)
+		if err != nil {
+			return "", err
+		}
+
+		for fkRows.Next() {
+			var fk ForeignKey
+			if err := fkRows.Scan(&fk.ColumnName, &fk.ReferencedTable, &fk.ReferencedColumn, &fk.ConstraintName); err != nil {
+				fkRows.Close()
+				return "", err
+			}
+			table.ForeignKeys = append(table.ForeignKeys, fk)
+		}
+		fkRows.Close()
+
+		structure.Tables = append(structure.Tables, table)
+	}
+
+	// Convert to JSON
+	structureJSON, err := json.Marshal(structure)
+	if err != nil {
+		return "", err
+	}
+
+	// Store in SQLite
+	sqliteDB := openSqliteConnection()
+	defer sqliteDB.Close()
+
+	// Create table if not exists
+	_, err = sqliteDB.Exec(`
+		CREATE TABLE IF NOT EXISTS database_structure (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			structure TEXT NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return "", err
+	}
+
+	// Insert new structure
+	_, err = sqliteDB.Exec("INSERT INTO database_structure (structure) VALUES (?)", string(structureJSON))
+	if err != nil {
+		return "", err
+	}
+
+	return string(structureJSON), nil
+}
+
+func (a *App) GetLatestDatabaseStructure() (string, error) {
+	db := openSqliteConnection()
+	defer db.Close()
+
+	var structure string
+	err := db.QueryRow("SELECT structure FROM database_structure ORDER BY created_at DESC LIMIT 1").Scan(&structure)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", nil
+		}
+		return "", err
+	}
+
+	return structure, nil
 }

@@ -30,6 +30,14 @@ export function GetDatabaseConnection() {
   return window['go']['main']['App']['GetDatabaseConnection']();
 }
 
+export function GetDatabaseStructure(arg1) {
+  return window['go']['main']['App']['GetDatabaseStructure'](arg1);
+}
+
+export function GetLatestDatabaseStructure() {
+  return window['go']['main']['App']['GetLatestDatabaseStructure']();
+}
+
 export function GetQueriesList(arg1) {
   return window['go']['main']['App']['GetQueriesList'](arg1);
 }

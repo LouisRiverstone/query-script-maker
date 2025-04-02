@@ -16,6 +16,10 @@ export function GetBuildParams():Promise<Record<string, any>>;
 
 export function GetDatabaseConnection():Promise<main.DatabaseConnection>;
 
+export function GetDatabaseStructure(arg1:main.DatabaseConnection):Promise<string>;
+
+export function GetLatestDatabaseStructure():Promise<string>;
+
 export function GetQueriesList(arg1:boolean):Promise<Array<main.Query>>;
 
 export function ImportDatabaseFile():Promise<void>;
