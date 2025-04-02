@@ -16,7 +16,7 @@
       
       <!-- Modal Body -->
       <div class="flex-1 overflow-auto p-4">
-        <SqlVisualizer :initialQuery="initialQuery" />
+        <SqlVisualizer :initialQuery="initialQuery" :databaseStructure="databaseStructure" />
       </div>
       
       <!-- Modal Footer -->
@@ -31,24 +31,51 @@
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import SqlVisualizer from './SqlVisualizer.vue';
 import Button from './Button.vue';
+import { GetLatestDatabaseStructure } from '../../wailsjs/go/main/App';
 
 const props = defineProps<{
   isOpen: boolean;
   initialQuery?: string;
+  databaseStructure?: string;
 }>();
 
 const emit = defineEmits(['close']);
+const databaseStructure = ref<string>('');
 
 const close = () => {
   emit('close');
+};
+
+// Fetch database structure if not provided
+const fetchDatabaseStructure = async () => {
+  if (!props.databaseStructure && props.isOpen) {
+    try {
+      const structure = await GetLatestDatabaseStructure();
+      if (structure) {
+        databaseStructure.value = structure;
+      }
+    } catch (error) {
+      console.error('Error fetching database structure:', error);
+    }
+  } else if (props.databaseStructure) {
+    databaseStructure.value = props.databaseStructure;
+  }
 };
 
 // Prevent body scrolling when modal is open
 watch(() => props.isOpen, (isOpen) => {
   if (isOpen) {
     document.body.style.overflow = 'hidden';
+    fetchDatabaseStructure();
   } else {
     document.body.style.overflow = '';
+  }
+});
+
+// Watch for database structure changes from props
+watch(() => props.databaseStructure, (newValue) => {
+  if (newValue) {
+    databaseStructure.value = newValue;
   }
 });
 
@@ -61,6 +88,7 @@ const handleKeyDown = (event: KeyboardEvent) => {
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown);
+  fetchDatabaseStructure();
 });
 
 onBeforeUnmount(() => {

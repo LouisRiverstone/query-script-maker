@@ -12,7 +12,8 @@
             "github.copilot-chat",
             "golang.Go",
             "Vue.volar",
-            "bradlc.vscode-tailwindcss"
+            "bradlc.vscode-tailwindcss",
+            "qwtel.sqlite-viewer"
         ]
       }
     },

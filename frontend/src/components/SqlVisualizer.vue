@@ -11,25 +11,27 @@
       </div>
       
       <div class="w-full md:w-1/2">
-        <SqlDiagram :query="diagramQuery" />
+        <SqlDiagram :query="diagramQuery" :databaseStructure="databaseStructure" />
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import Editor from './Editor.vue';
 import SqlDiagram from './SqlDiagram.vue';
 import Button from './Button.vue';
 
 const props = defineProps<{
   initialQuery?: string;
+  databaseStructure?: string;
 }>();
 
 const sqlQuery = ref(props.initialQuery || '');
 const diagramQuery = ref('');
 const originalQuery = ref(props.initialQuery || '');
+const databaseStructure = computed(() => props.databaseStructure || '');
 
 const visualize = () => {
   diagramQuery.value = sqlQuery.value;

@@ -60,7 +60,10 @@
 
                                     <div class="flex flex-wrap md:flex-row flex-col gap-2 justify-end">
                                         <div class="flex flex-wrap md:flex-row flex-col gap-2 px-2 md:px-0">
-                                            <Button type="button" @click="openSqlVisualizer">
+                                            <Button type="button" @click="openSqlVisualizer" class="flex items-center">
+                                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                                                </svg>
                                                 Visualize SQL
                                             </Button>
                                             <Button v-if="databaseConnection && databaseConnection.ID !== 0"
@@ -99,7 +102,7 @@
             </section>
         </Steps>
         <SqlResultTable :data="responseTest" v-model="showSqlTable" />
-        <SqlVisualizerModal :isOpen="showSqlVisualizer" :initialQuery="query" @close="closeSqlVisualizer" />
+        <SqlVisualizerModal :isOpen="showSqlVisualizer" :initialQuery="query" :databaseStructure="databaseStructure" @close="closeSqlVisualizer" />
         <DatabaseDiagramModal :isOpen="showDatabaseDiagram" :databaseStructure="databaseStructure"
             @close="closeDatabaseDiagram" @refresh="refreshDatabaseDiagram" />
     </div>
@@ -300,8 +303,21 @@ const testBatchSQL = async (query: string) => {
     }
 }
 
-const openSqlVisualizer = () => {
-    showSqlVisualizer.value = true;
+const openSqlVisualizer = async () => {
+    try {
+        // Check if we already have the database structure
+        if (!databaseStructure.value) {
+            loadingDatabaseStructure.value = true;
+            databaseStructure.value = await GetLatestDatabaseStructure();
+        }
+        showSqlVisualizer.value = true;
+    } catch (error) {
+        console.error('Error fetching database structure:', error);
+        // Still open the visualizer even if there's an error getting the structure
+        showSqlVisualizer.value = true;
+    } finally {
+        loadingDatabaseStructure.value = false;
+    }
 };
 
 const closeSqlVisualizer = () => {
