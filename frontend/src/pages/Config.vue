@@ -66,11 +66,13 @@
                     </div>
                 </div>
                 <div class="flex flex-row justify-end gap-3 mt-2">
-                    <Button type="button" :disabled="testingConnection" class="bg-blue-600 hover:bg-blue-700" @click="testDatabaseConnection">
-                        <span v-if="!testingConnection">TEST CONNECTION</span>
-                        <Loader v-else />
+                    <Button type="button" :disabled="testingConnection" :loading="testingConnection" @click="testDatabaseConnection">
+                        TEST CONNECTION
                     </Button>
-                    <Button type="button" class="bg-green-600 hover:bg-green-700" @click="() => showSaveDatabaseConnection = true">SAVE CONNECTION</Button>
+                    <Button type="button" :disabled="refreshingStructure" :loading="refreshingStructure" @click="refreshDatabaseStructure">
+                        REFRESH STRUCTURE
+                    </Button>
+                    <Button type="button" @click="() => showSaveDatabaseConnection = true">SAVE CONNECTION</Button>
                 </div>
             </div>
             <div v-else class="flex justify-center py-4">
@@ -98,7 +100,7 @@ import Dropdown from '../components/Dropdown.vue';
 import ConfirmationModal from '../components/ConfirmationModal.vue';
 
 
-import { ImportDatabaseFile, ExportDatabaseFile, GetQueriesList, InsertQueryInDatabase, UpdateQuery, DeleteQuery, CreateOrUpdateDatabaseConnection, GetDatabaseConnection, TestDatabaseConnection } from '../../wailsjs/go/main/App'
+import { ImportDatabaseFile, ExportDatabaseFile, GetQueriesList, InsertQueryInDatabase, UpdateQuery, DeleteQuery, CreateOrUpdateDatabaseConnection, GetDatabaseConnection, TestDatabaseConnection, GetDatabaseStructure } from '../../wailsjs/go/main/App'
 import { main } from '../../wailsjs/go/models';
 
 const queries = ref<Array<main.Query>>([])
@@ -128,6 +130,7 @@ const showSaveQueryModal = ref<boolean>(false)
 const showSaveDatabaseConnection = ref<boolean>(false)
 const loadingDatabaseConnection = ref<boolean>(false)
 const testingConnection = ref<boolean>(false)
+const refreshingStructure = ref<boolean>(false)
 
 const mapQueriesForSelect = (queries: Array<main.Query>) => {
     return queries.map((query) => {
@@ -270,6 +273,26 @@ const testDatabaseConnection = async () => {
         console.error(error)
     } finally {
         testingConnection.value = false
+    }
+}
+
+const refreshDatabaseStructure = async () => {
+    try {
+        refreshingStructure.value = true
+
+        const structure = await GetDatabaseStructure(databaseConnection.value)
+
+        if (structure) {
+            alert("Database structure refreshed successfully")
+            return
+        }
+
+        alert("Failed to refresh database structure")
+    } catch (error) {
+        console.error(error)
+        alert("Failed to refresh database structure")
+    } finally {
+        refreshingStructure.value = false
     }
 }
 
