@@ -61,13 +61,6 @@
       
       <!-- Diagram Content -->
       <div class="flex-1 flex flex-col overflow-hidden">
-        <div class="diagram-header p-2 border-b border-gray-200 dark:border-gray-700">
-          <div class="diagram-controls">
-            <Button type="button" @click="zoomIn" class="mr-1">+</Button>
-            <Button type="button" @click="zoomOut" class="mr-1">-</Button>
-            <Button type="button" @click="fitView">Fit</Button>
-          </div>
-        </div>
         <div ref="diagramContainer" class="diagram-content flex-1 bg-white dark:bg-gray-800 rounded-lg p-2 overflow-hidden">
           <VueFlow v-if="nodes.length > 0"
             :default-zoom="1"
@@ -99,12 +92,23 @@
                     }"
                   >
                     <div class="flex items-center">
-                      <span v-if="column.isPrimary" class="text-yellow-600 dark:text-yellow-400 mr-1">🔑</span>
-                      <span v-else-if="column.isForeign" class="text-blue-600 dark:text-blue-400 mr-1">🔗</span>
+                      <span v-if="column.isPrimary" class="text-yellow-600 dark:text-yellow-400 mr-1" title="Primary Key">🔑</span>
+                      <span v-else-if="column.isForeign" class="text-blue-600 dark:text-blue-400 mr-1" title="Foreign Key">🔗</span>
                       <span v-else class="mr-1 w-3.5"></span>
                     </div>
-                    <div class="flex-1 text-left whitespace-nowrap pr-2">{{ column.name }}</div>
-                    <div class="text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap">{{ column.type }}</div>
+                    <div class="flex-1 text-left whitespace-nowrap pr-2">
+                      {{ column.name }}
+                      <span v-if="column.nullable === 'YES'" class="text-gray-400 dark:text-gray-500 text-xs italic ml-1" title="Nullable">(null)</span>
+                    </div>
+                    <div class="text-gray-500 dark:text-gray-400 text-xs whitespace-nowrap flex items-center">
+                      <span>{{ column.type }}</span>
+                      <span v-if="column.default" class="ml-1 text-gray-400 dark:text-gray-500 italic" title="Default value">
+                        = {{ column.default.length > 8 ? column.default.substring(0, 8) + '...' : column.default }}
+                      </span>
+                      <span v-if="column.extra" class="ml-1 px-1 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded text-[10px]" title="Extra attribute">
+                        {{ column.extra }}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -131,9 +135,17 @@
                   <div class="w-3 h-3 bg-yellow-500 dark:bg-yellow-400 rounded-sm mr-2"></div>
                   <span class="text-xs text-gray-600 dark:text-gray-300">Primary Key</span>
                 </div>
-                <div class="legend-item flex items-center">
+                <div class="legend-item flex items-center mb-1">
                   <div class="w-3 h-3 bg-blue-500 dark:bg-blue-400 rounded-sm mr-2"></div>
                   <span class="text-xs text-gray-600 dark:text-gray-300">Foreign Key</span>
+                </div>
+                <div class="legend-item flex items-center mb-1">
+                  <span class="text-xs text-gray-400 dark:text-gray-500 italic mr-2">(null)</span>
+                  <span class="text-xs text-gray-600 dark:text-gray-300">Nullable Field</span>
+                </div>
+                <div class="legend-item flex items-center">
+                  <span class="mr-2 px-1 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded text-[10px]">extra</span>
+                  <span class="text-xs text-gray-600 dark:text-gray-300">Extra Attribute</span>
                 </div>
               </div>
             </Panel>
