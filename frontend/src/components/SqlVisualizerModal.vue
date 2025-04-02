@@ -28,7 +28,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import SqlVisualizer from './SqlVisualizer.vue';
 import Button from './Button.vue';
 
@@ -50,6 +50,21 @@ watch(() => props.isOpen, (isOpen) => {
   } else {
     document.body.style.overflow = '';
   }
+});
+
+// Handle escape key to close modal
+const handleKeyDown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape' && props.isOpen) {
+    close();
+  }
+};
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeyDown);
 });
 </script>
 

@@ -1,15 +1,18 @@
 /**
  * A simplified SQL parser for visualization purposes
- * This replaces the problematic sql-parser-mistic package with a custom implementation
+ * Optimized for use with @vue-flow/core
  */
 
 export interface SQLTable {
+  id: string; // Unique ID for vue-flow
   name: string;
   alias?: string;
   columns: SQLColumn[];
+  position?: { x: number; y: number }; // Position for vue-flow
 }
 
 export interface SQLColumn {
+  id: string; // Unique ID for column
   name: string;
   alias?: string;
   table?: string;
@@ -20,6 +23,7 @@ export interface SQLColumn {
 }
 
 export interface SQLJoin {
+  id: string; // Unique ID for edge in vue-flow
   table: SQLTable;
   type: 'INNER' | 'LEFT' | 'RIGHT' | 'FULL' | 'CROSS';
   condition?: {
@@ -27,6 +31,8 @@ export interface SQLJoin {
     leftColumn: string;
     rightTable: string;
     rightColumn: string;
+    sourceId?: string; // IDs for vue-flow edge
+    targetId?: string;
   };
 }
 
@@ -39,10 +45,13 @@ export interface SQLParseResult {
   error?: string;
   queryType: 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'OTHER';
   insertValues?: { [column: string]: string }; // Values for INSERT queries
+  // Vue Flow specific data
+  nodes: any[];
+  edges: any[];
 }
 
 /**
- * Parses SQL query to extract table and join information for visualization
+ * Parses SQL query to extract table and join information for visualization with Vue Flow
  * @param sql The SQL query to parse
  * @returns Parsed SQL information for diagram visualization
  */
@@ -54,7 +63,9 @@ export function parse(sql: string): SQLParseResult {
       joins: [],
       columns: [],
       selectedColumns: [],
-      queryType: 'OTHER'
+      queryType: 'OTHER',
+      nodes: [],
+      edges: []
     };
 
     if (!sql || !sql.trim()) {
@@ -93,7 +104,9 @@ export function parse(sql: string): SQLParseResult {
       columns: [],
       selectedColumns: [],
       error: error instanceof Error ? error.message : String(error),
-      queryType: 'OTHER'
+      queryType: 'OTHER',
+      nodes: [],
+      edges: []
     };
   }
 }
@@ -116,13 +129,14 @@ function parseSelectQuery(sql: string, result: SQLParseResult): SQLParseResult {
     } else {
       const columnMatches = columnsSection.split(/\s*,\s*/);
       
-      columnMatches.forEach(colStr => {
+      columnMatches.forEach((colStr, colIndex) => {
         // Handle "table.column as alias" pattern
         const colMatch = /(?:([A-Za-z0-9_]+)\.)?([A-Za-z0-9_*]+)(?:\s+[Aa][Ss]\s+([A-Za-z0-9_]+))?/.exec(colStr.trim());
         if (colMatch) {
           const [_, tableName, colName, colAlias] = colMatch;
           
           const column: SQLColumn = {
+            id: `col-${colIndex}-${Date.now()}`, // Unique ID for vue-flow
             name: colName,
             alias: colAlias,
             table: tableName,
@@ -151,9 +165,11 @@ function parseSelectQuery(sql: string, result: SQLParseResult): SQLParseResult {
     const tableAlias = fromMatch[2] || tableName;
     
     const mainTable: SQLTable = {
+      id: `table-${tableName}-${Date.now()}`, // Unique ID for vue-flow
       name: tableName,
       alias: tableAlias,
-      columns: columnsMap.get(tableName) || columnsMap.get(tableAlias) || []
+      columns: columnsMap.get(tableName) || columnsMap.get(tableAlias) || [],
+      position: { x: 50, y: 50 } // Initial position
     };
     
     result.mainTable = mainTable;
@@ -166,14 +182,22 @@ function parseSelectQuery(sql: string, result: SQLParseResult): SQLParseResult {
   // Extract JOIN clauses
   const joinRegex = /\b(INNER|LEFT|RIGHT|FULL|CROSS)?\s*JOIN\s+([^\s]+)(?:\s+(?:AS\s+)?([^\s]+))?\s+ON\s+([^\s.]+)\.([^\s=]+)\s*=\s*([^\s.]+)\.([^\s\s]+)/gi;
   let joinMatch;
+  let joinCount = 0;
+  
   while ((joinMatch = joinRegex.exec(sql)) !== null) {
     const [_, joinType = 'INNER', tableName, tableAlias, leftTable, leftColumn, rightTable, rightColumn] = joinMatch;
     const alias = tableAlias || tableName;
     
+    // Calculate position based on existing tables
+    const xOffset = 400 + (result.tables.length % 2) * 100;
+    const yOffset = 50 + Math.floor(result.tables.length / 2) * 250;
+    
     const joinTable: SQLTable = {
+      id: `table-${tableName}-${Date.now()}`, // Unique ID for vue-flow
       name: tableName,
       alias: alias,
-      columns: columnsMap.get(tableName) || columnsMap.get(alias) || []
+      columns: columnsMap.get(tableName) || columnsMap.get(alias) || [],
+      position: { x: xOffset, y: yOffset } // Position for vue-flow
     };
     
     if (!result.tables.some(t => t.name === joinTable.name)) {
@@ -188,37 +212,50 @@ function parseSelectQuery(sql: string, result: SQLParseResult): SQLParseResult {
       rightColumn
     };
     
+    // Add IDs for edge connection
+    let sourceTableId = '';
+    let targetTableId = '';
+    
     // Mark foreign key relationships
     result.tables.forEach(table => {
       if (table.name === leftTable || table.alias === leftTable) {
         // Check if column already exists, if not, add it
         let fkColumn = table.columns.find(c => c.name === leftColumn);
         if (!fkColumn) {
-          fkColumn = { name: leftColumn, isForeignKey: true };
+          fkColumn = { id: `col-${leftColumn}-${Date.now()}`, name: leftColumn, isForeignKey: true };
           table.columns.push(fkColumn);
           result.columns.push({ ...fkColumn, table: table.name });
         } else {
           fkColumn.isForeignKey = true;
         }
+        sourceTableId = table.id;
       }
       if (table.name === rightTable || table.alias === rightTable) {
         // Check if column already exists, if not, add it
         let fkColumn = table.columns.find(c => c.name === rightColumn);
         if (!fkColumn) {
-          fkColumn = { name: rightColumn, isForeignKey: true };
+          fkColumn = { id: `col-${rightColumn}-${Date.now()}`, name: rightColumn, isForeignKey: true };
           table.columns.push(fkColumn);
           result.columns.push({ ...fkColumn, table: table.name });
         } else {
           fkColumn.isForeignKey = true;
         }
+        targetTableId = table.id;
       }
     });
     
-    result.joins.push({
+    const joinEdge = {
+      id: `join-${joinCount++}-${Date.now()}`,
       table: joinTable,
       type: joinType.toUpperCase() as any,
-      condition
-    });
+      condition: {
+        ...condition,
+        sourceId: sourceTableId,
+        targetId: targetTableId
+      }
+    };
+    
+    result.joins.push(joinEdge);
   }
   
   // Look for additional columns in WHERE clause
@@ -236,7 +273,7 @@ function parseSelectQuery(sql: string, result: SQLParseResult): SQLParseResult {
       );
       
       if (table && !table.columns.some(c => c.name === colName)) {
-        const column = { name: colName };
+        const column = { id: `col-${colName}-${Date.now()}`, name: colName };
         table.columns.push(column);
         result.columns.push({ ...column, table: tableName });
       }
@@ -257,12 +294,12 @@ function parseSelectQuery(sql: string, result: SQLParseResult): SQLParseResult {
   }
   
   // If we haven't found any columns in any table, add default ones
-  result.tables.forEach(table => {
+  result.tables.forEach((table, tableIndex) => {
     if (table.columns.length === 0) {
       table.columns = [
-        { name: 'id', isPrimaryKey: true },
-        { name: 'name' },
-        { name: 'created_at' }
+        { id: `col-id-${tableIndex}-${Date.now()}`, name: 'id', isPrimaryKey: true },
+        { id: `col-name-${tableIndex}-${Date.now()}`, name: 'name' },
+        { id: `col-created-${tableIndex}-${Date.now()}`, name: 'created_at' }
       ];
     }
   });
@@ -280,6 +317,9 @@ function parseSelectQuery(sql: string, result: SQLParseResult): SQLParseResult {
   });
   
   result.selectedColumns = selectedColumns;
+  
+  // Create Vue Flow nodes and edges
+  createVueFlowElements(result);
 
   return result;
 }
@@ -300,8 +340,10 @@ function parseInsertQuery(sql: string, result: SQLParseResult): SQLParseResult {
   
   // Create the table object
   const table: SQLTable = {
+    id: `table-${tableName}-${Date.now()}`,
     name: tableName,
-    columns: []
+    columns: [],
+    position: { x: 50, y: 50 } // Initial position
   };
   
   result.mainTable = table;
@@ -344,6 +386,7 @@ function parseInsertQuery(sql: string, result: SQLParseResult): SQLParseResult {
   // Map columns to values
   for (let i = 0; i < columns.length && i < values.length; i++) {
     const column: SQLColumn = {
+      id: `col-${columns[i]}-${Date.now()}`,
       name: columns[i],
       value: values[i],
       isSelected: true
@@ -362,6 +405,7 @@ function parseInsertQuery(sql: string, result: SQLParseResult): SQLParseResult {
     values.forEach((value, index) => {
       const columnName = `column${index + 1}`;
       const column: SQLColumn = {
+        id: `col-${columnName}-${Date.now()}`,
         name: columnName,
         value: value,
         isSelected: true
@@ -386,5 +430,137 @@ function parseInsertQuery(sql: string, result: SQLParseResult): SQLParseResult {
     }
   });
   
+  // For INSERT queries, create a "values" node
+  const valuesNode = {
+    id: `values-${Date.now()}`,
+    type: 'valuesNode',
+    data: { values: result.insertValues },
+    position: { x: 50, y: 250 }
+  };
+  
+  result.nodes.push(valuesNode);
+  
+  // Create Vue Flow nodes and edges
+  createVueFlowElements(result);
+  
   return result;
+}
+
+/**
+ * Creates Vue Flow nodes and edges from the parsed SQL data
+ */
+function createVueFlowElements(result: SQLParseResult): void {
+  // Create nodes for tables
+  result.tables.forEach((table, index) => {
+    // Ensure position is set
+    if (!table.position) {
+      table.position = {
+        x: 50 + (index % 3) * 350,
+        y: 50 + Math.floor(index / 3) * 300
+      };
+    }
+    
+    // Create table node
+    result.nodes.push({
+      id: table.id,
+      type: 'tableNode',
+      data: {
+        label: table.name,
+        alias: table.alias,
+        columns: table.columns,
+        isMainTable: result.mainTable?.id === table.id,
+        queryType: result.queryType
+      },
+      position: table.position
+    });
+  });
+  
+  // Create edges for joins
+  result.joins.forEach(join => {
+    if (join.condition && join.condition.sourceId && join.condition.targetId) {
+      result.edges.push({
+        id: join.id,
+        source: join.condition.sourceId,
+        target: join.condition.targetId,
+        type: 'joinEdge',
+        data: {
+          joinType: join.type,
+          sourceColumn: join.condition.leftColumn,
+          targetColumn: join.condition.rightColumn
+        },
+        animated: true,
+        markerEnd: {
+          type: 'arrowclosed',
+          width: 20,
+          height: 20
+        }
+      });
+    }
+  });
+  
+  // Create result node for SELECT queries
+  if (result.queryType === 'SELECT' && result.selectedColumns.length > 0) {
+    const resultNode = {
+      id: `result-${Date.now()}`,
+      type: 'resultNode',
+      data: {
+        columns: result.selectedColumns
+      },
+      position: {
+        x: 50 + (result.tables.length % 3) * 350,
+        y: Math.max(...result.tables.map(t => (t.position?.y || 0) + 300)) + 50
+      }
+    };
+    
+    result.nodes.push(resultNode);
+    
+    // Connect selected columns to result node
+    result.selectedColumns.forEach((col, index) => {
+      if (col.table) {
+        const sourceTable = result.tables.find(t => 
+          t.name === col.table || t.alias === col.table
+        );
+        
+        if (sourceTable) {
+          result.edges.push({
+            id: `select-edge-${index}-${Date.now()}`,
+            source: sourceTable.id,
+            target: resultNode.id,
+            type: 'selectEdge',
+            data: {
+              column: col.name,
+              alias: col.alias
+            },
+            style: { stroke: '#10b981' },
+            animated: true
+          });
+        }
+      }
+    });
+  }
+  
+  // Create edges for INSERT queries
+  if (result.queryType === 'INSERT' && result.nodes.find(n => n.type === 'valuesNode')) {
+    const valuesNode = result.nodes.find(n => n.type === 'valuesNode');
+    const tableNode = result.nodes.find(n => n.type === 'tableNode');
+    
+    if (valuesNode && tableNode) {
+      result.edges.push({
+        id: `insert-edge-${Date.now()}`,
+        source: valuesNode.id,
+        target: tableNode.id,
+        type: 'insertEdge',
+        data: {
+          values: result.insertValues
+        },
+        style: { stroke: '#10b981' },
+        animated: true,
+        markerEnd: {
+          type: 'arrowclosed',
+          width: 20,
+          height: 20
+        }
+      });
+    }
+  }
 } 
