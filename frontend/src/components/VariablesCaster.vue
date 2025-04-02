@@ -21,18 +21,18 @@ const fields = ref<string[]>([]);
 const variables = computed(() => {
     return fields.value.reduce((acc, field, i) => {
         console.log(field)
-        acc.push({ field: props.headers[i], value: field, position: i });
+        acc.push({ Field: props.headers[i], Value: field, Position: i });
         
         return acc;
-    }, [] as { field: string, value: string, position: number }[]);
+    }, [] as { Field: string, Value: string, Position: number }[]);
 });
 
 const parseAsVariableName = (str: string) => {
-    return str.replace(/[^a-zA-Z0-9]/g, '_').toLocaleLowerCase();
+    return str.replace(/[^a-zA-Z0-9]/g, '_');
 }
 
 onMounted(() => {
-    const tableVars= props.headers.map((header) => {
+    const tableVars = props.headers.map((header) => {
         return parseAsVariableName(header);
     });
 
