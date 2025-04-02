@@ -4,28 +4,65 @@
       <!-- Table List Sidebar -->
       <div class="w-72 flex-shrink-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
         <h3 class="font-semibold text-gray-700 dark:text-gray-300 p-3 border-b border-gray-200 dark:border-gray-700">
-          Tables ({{ nodes.length }})
+          Tables ({{ filteredNodes.length }}/{{ nodes.length }})
         </h3>
+        
+        <!-- Search input -->
+        <div class="px-2 pt-2 pb-1">
+          <div class="relative">
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Search tables..."
+              class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 border border-gray-200 dark:border-gray-600"
+            />
+            <span v-if="searchQuery" @click="searchQuery = ''" class="absolute right-3 top-2.5 cursor-pointer text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </span>
+            <span v-else class="absolute right-3 top-2.5 text-gray-500 dark:text-gray-400">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </span>
+          </div>
+        </div>
+        
         <div class="overflow-y-auto flex-1 p-2 bg-white dark:bg-gray-800">
-          <div class="space-y-1">
-            <div v-for="node in nodes" :key="node.id" class="table-list-item mb-3">
+          <div v-if="filteredNodes.length === 0" class="text-center py-4 text-gray-500 dark:text-gray-400 text-sm italic">
+            No tables match your search
+          </div>
+          <div v-else class="space-y-1">
+            <div v-for="node in filteredNodes" :key="node.id" class="table-list-item mb-3">
               <div 
                 class="cursor-pointer p-2 text-sm rounded-md bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
                 :class="{'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-600': selectedTable === node.id}"
-                @click="focusNode(node.id)"
               >
-                <div class="font-medium text-gray-800 dark:text-gray-200 flex items-center">
-                  <span class="text-indigo-600 dark:text-indigo-400 mr-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                <div class="font-medium text-gray-800 dark:text-gray-200 flex items-center justify-between" @click="toggleExpandTable(node.id)">
+                  <div class="flex items-center">
+                    <span class="text-indigo-600 dark:text-indigo-400 mr-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                      </svg>
+                    </span>
+                    <span :class="{'bg-yellow-100 dark:bg-yellow-900/50 px-1 rounded': tableMatchesSearch(node)}">{{ node.data.label }}</span>
+                    <span class="ml-1 text-xs text-gray-500 dark:text-gray-400">({{ node.data.columns.length }})</span>
+                  </div>
+                  
+                  <!-- Expand/Collapse Icon -->
+                  <button class="text-gray-500 dark:text-gray-400 focus:outline-none">
+                    <svg v-if="expandedTables.includes(node.id)" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
-                  </span>
-                  {{ node.data.label }}
-                  <span class="ml-1 text-xs text-gray-500 dark:text-gray-400">({{ node.data.columns.length }})</span>
+                    <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
                 </div>
                 
-                <!-- Column list -->
-                <div class="mt-2 ml-2 space-y-0.5 max-h-60 overflow-y-auto border-l-2 border-gray-200 dark:border-gray-600 pl-2">
+                <!-- Column list (collapsible) -->
+                <div v-if="expandedTables.includes(node.id)" class="mt-2 ml-2 space-y-0.5 max-h-60 overflow-y-auto border-l-2 border-gray-200 dark:border-gray-600 pl-2">
                   <div 
                     v-for="column in node.data.columns" 
                     :key="`${node.id}-${column.name}`"
@@ -39,7 +76,7 @@
                       <span v-if="column.isPrimary" class="text-yellow-600 dark:text-yellow-400 mr-1" title="Primary Key">🔑</span>
                       <span v-else-if="column.isForeign" class="text-blue-600 dark:text-blue-400 mr-1" title="Foreign Key">🔗</span>
                       <span v-else class="mr-1 w-3.5"></span>
-                      <span class="font-medium text-gray-700 dark:text-gray-300">{{ column.name }}</span>
+                      <span :class="{'bg-yellow-100 dark:bg-yellow-900/50 px-1 rounded': columnMatchesSearch(column)}">{{ column.name }}</span>
                     </div>
                     <div class="flex items-center mt-0.5 ml-4 text-gray-500 dark:text-gray-400">
                       <span class="inline-block px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">{{ column.type }}</span>
@@ -52,6 +89,16 @@
                       {{ column.extra }}
                     </div>
                   </div>
+                </div>
+
+                <!-- Focus button -->
+                <div v-if="selectedTable !== node.id" class="mt-2 flex justify-end">
+                  <button 
+                    @click.stop="focusNode(node.id)" 
+                    class="text-xs px-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
+                  >
+                    Focus
+                  </button>
                 </div>
               </div>
             </div>
@@ -253,6 +300,11 @@ const focusNode = (nodeId: string) => {
     selectedTable.value = nodeId;
     selectedColumn.value = null;
     
+    // Ensure the table is expanded
+    if (!expandedTables.value.includes(nodeId)) {
+      expandedTables.value.push(nodeId);
+    }
+    
     // Center the view on the node with zoom
     const x = node.position.x + node.style.width / 2;
     const y = node.position.y + 100; // Add some offset for better centering
@@ -447,6 +499,77 @@ watch(() => props.isDarkMode, (newValue) => {
     // If the parent is controlling dark mode, we don't need to update it locally
     // This prevents conflicts between parent and local dark mode detection
   }
+});
+
+// Filter nodes based on search query
+const searchQuery = ref('');
+const filteredNodes = computed(() => {
+  if (!nodes.value || !searchQuery.value) {
+    return nodes.value;
+  }
+  
+  const query = searchQuery.value.toLowerCase();
+  
+  return nodes.value.filter(node => {
+    // Check if table name matches
+    if (node.data.label.toLowerCase().includes(query)) {
+      return true;
+    }
+    
+    // Check if any column name matches
+    return node.data.columns.some((column: { name: string }) => 
+      column.name.toLowerCase().includes(query)
+    );
+  });
+});
+
+// Expand/collapse table functionality
+const expandedTables = ref<string[]>([]);
+const toggleExpandTable = (tableId: string) => {
+  if (expandedTables.value.includes(tableId)) {
+    expandedTables.value = expandedTables.value.filter(id => id !== tableId);
+  } else {
+    expandedTables.value.push(tableId);
+  }
+};
+
+// Helper to check if table name matches search
+const tableMatchesSearch = (node: any) => {
+  if (!searchQuery.value) return false;
+  return node.data.label.toLowerCase().includes(searchQuery.value.toLowerCase());
+};
+
+// Helper to check if column matches search
+const columnMatchesSearch = (column: { name: string }) => {
+  if (!searchQuery.value) return false;
+  return column.name.toLowerCase().includes(searchQuery.value.toLowerCase());
+};
+
+// Watch search query to auto-expand tables with matches
+watch(() => searchQuery.value, (newQuery) => {
+  if (!newQuery) {
+    // If query is cleared, collapse all tables except the selected one
+    expandedTables.value = selectedTable.value ? [selectedTable.value] : [];
+    return;
+  }
+  
+  // Find tables that match the search query (either table name or column names)
+  const matchingTableIds = nodes.value.filter(node => {
+    const query = newQuery.toLowerCase();
+    
+    // Check if table name matches
+    if (node.data.label.toLowerCase().includes(query)) {
+      return true;
+    }
+    
+    // Check if any column name matches
+    return node.data.columns.some((column: { name: string }) => 
+      column.name.toLowerCase().includes(query)
+    );
+  }).map(node => node.id);
+  
+  // Auto expand tables with matches
+  expandedTables.value = [...new Set([...expandedTables.value, ...matchingTableIds])];
 });
 </script>
 
