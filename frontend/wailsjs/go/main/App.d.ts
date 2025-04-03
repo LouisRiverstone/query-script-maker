@@ -12,6 +12,8 @@ export function DeleteQuery(arg1:number):Promise<void>;
 
 export function ExportDatabaseFile():Promise<void>;
 
+export function GenerateSQLFromPrompt(arg1:string):Promise<string>;
+
 export function GetBuildParams():Promise<Record<string, any>>;
 
 export function GetDatabaseConnection():Promise<main.DatabaseConnection>;
@@ -29,6 +31,10 @@ export function InsertQueryInDatabase(arg1:main.Query):Promise<void>;
 export function MakeBindedSQL(arg1:string,arg2:Array<Record<string, any>>,arg3:Array<main.Variable>,arg4:boolean):Promise<string>;
 
 export function ReadXLSXFile():Promise<string>;
+
+export function RecordQueryFeedback(arg1:string,arg2:boolean,arg3:string,arg4:number,arg5:number):Promise<void>;
+
+export function ResetSQLAssistant():Promise<void>;
 
 export function TestBatchQueryInDatabase(arg1:main.DatabaseConnection,arg2:Array<string>,arg3:boolean):Promise<Array<any>>;
 

@@ -27,6 +27,77 @@ func NewQueryBuilder(language string, dbTables []models.TableForAI) *QueryBuilde
 func (qb *QueryBuilder) BuildSelectQuery(tables []models.TableInfo, columns []models.ColumnInfo,
 	conditions []models.Condition, subOperations []string, prompt string) string {
 
+	// Check if we have tables
+	if len(tables) == 0 {
+		// Try to find a relevant table from context
+		mostRelevantTable := FindMostRelevantTable(prompt, qb.dbTables)
+		if mostRelevantTable != "" {
+			tables = append(tables, models.TableInfo{
+				Name:       mostRelevantTable,
+				Confidence: 0.6,
+			})
+		} else if len(qb.dbTables) > 0 {
+			// If we can't determine a table, return a comment
+			// informing the user about the problem
+			if qb.language == "pt" {
+				return "-- Não foi possível determinar qual tabela consultar. Por favor, especifique a tabela em sua consulta."
+			} else {
+				return "-- Unable to determine which table to query. Please specify the table in your query."
+			}
+		}
+	}
+
+	// If we still don't have tables, we can't build the query
+	if len(tables) == 0 {
+		if qb.language == "pt" {
+			return "-- Não foi possível determinar qual tabela consultar"
+		} else {
+			return "-- Unable to determine which table to query"
+		}
+	}
+
+	// Directly extract specific table and column mentions from the prompt
+	// This is to handle cases where the user explicitly mentions them
+	explicitTableRegex := regexp.MustCompile(`(?i)(?:da|de|from)\s+tabela\s+(\w+)`)
+	explicitColRegex := regexp.MustCompile(`(?i)(?:a coluna|as colunas|selecione|select|column[s]?)\s+(\w+)`)
+
+	if matches := explicitTableRegex.FindStringSubmatch(prompt); len(matches) > 1 {
+		explicitTable := matches[1]
+		// Verify this table exists in our schema
+		tableExists := false
+		for _, dbTable := range qb.dbTables {
+			if strings.EqualFold(dbTable.Name, explicitTable) {
+				// Replace the tables array entirely with this explicit mention
+				tables = []models.TableInfo{{
+					Name:       dbTable.Name, // Use correct case from schema
+					Confidence: 1.0,
+				}}
+				tableExists = true
+				break
+			}
+		}
+
+		// If we found an explicit table mention but it doesn't exist in schema,
+		// we should still use it (the user might know better than us)
+		if !tableExists && explicitTable != "" {
+			tables = []models.TableInfo{{
+				Name:       explicitTable,
+				Confidence: 0.9,
+			}}
+		}
+	}
+
+	// Check for explicit column mentions too
+	if matches := explicitColRegex.FindStringSubmatch(prompt); len(matches) > 1 && len(tables) > 0 {
+		explicitCol := matches[1]
+		// If we have an explicit column mentioned, override any previously detected columns
+		columns = []models.ColumnInfo{{
+			Name:       explicitCol,
+			TableName:  tables[0].Name,
+			Confidence: 1.0,
+		}}
+	}
+
 	// Build column list
 	var columnList []string
 	for _, col := range columns {
@@ -67,6 +138,24 @@ func (qb *QueryBuilder) BuildSelectQuery(tables []models.TableInfo, columns []mo
 	// Handle sub-operations (additional clauses)
 	var additionalClauses []string
 
+	// If subOperations is empty but we have a prompt, try to determine what suboperations might be needed
+	if len(subOperations) == 0 && prompt != "" {
+		promptLower := strings.ToLower(prompt)
+
+		// Check for ordering needs
+		if util.ContainsAny(promptLower, []string{"order", "sort", "ordenar", "ordenado", "decrescente", "crescente", "asc", "desc"}) {
+			subOperations = append(subOperations, "order")
+		}
+
+		// Check for grouping needs
+		if util.ContainsAny(promptLower, []string{"group", "aggregate", "agrupar", "agrupado", "média", "average", "count", "sum", "soma", "total"}) {
+			subOperations = append(subOperations, "group")
+		}
+
+		// Add limit by default
+		subOperations = append(subOperations, "limit")
+	}
+
 	for _, subOp := range subOperations {
 		switch subOp {
 		case "order":
@@ -85,6 +174,9 @@ func (qb *QueryBuilder) BuildSelectQuery(tables []models.TableInfo, columns []mo
 			limitClause := qb.generateLimitClause(prompt)
 			if limitClause != "" {
 				additionalClauses = append(additionalClauses, limitClause)
+			} else {
+				// Always add a limit if none is specified
+				additionalClauses = append(additionalClauses, "LIMIT 100")
 			}
 		}
 	}
@@ -127,7 +219,12 @@ func (qb *QueryBuilder) BuildCountQuery(tables []models.TableInfo, columns []mod
 	} else if len(tables) > 1 {
 		fromClause = qb.buildJoinClause(tables, prompt)
 	} else {
-		return "SELECT COUNT(*) FROM users" // Fallback to a common table
+		// No default table here - we need to find a table from context
+		fromClause = FindMostRelevantTable(prompt, qb.dbTables)
+		if fromClause == "" && len(qb.dbTables) > 0 {
+			// If still nothing found, use the first available table
+			fromClause = qb.dbTables[0].Name
+		}
 	}
 
 	// Build the query
@@ -252,103 +349,133 @@ func (qb *QueryBuilder) BuildJoinQuery(tables []models.TableInfo, columns []mode
 
 // BuildGroupByQuery creates a GROUP BY query
 func (qb *QueryBuilder) BuildGroupByQuery(tables []models.TableInfo, columns []models.ColumnInfo, conditions []models.Condition, prompt string) string {
+	// Check if we have tables
 	if len(tables) == 0 {
-		return "SELECT COUNT(*) FROM users GROUP BY status" // Fallback
-	}
-
-	// Determine grouping column(s)
-	groupColumns := qb.findGroupByColumns(tables, prompt)
-	if len(groupColumns) == 0 {
-		// Fall back to basic select if no group columns found
-		return qb.BuildSelectQuery(tables, columns, conditions, nil, prompt)
-	}
-
-	// Prepare SELECT columns: group columns + aggregates
-	var selectColumns []string
-
-	// Add group columns to SELECT
-	for _, col := range groupColumns {
-		selectColumns = append(selectColumns, col)
-	}
-
-	// Look for aggregation functions in the prompt
-	var aggregatedCols []string
-
-	// Get aggregation functions based on language
-	var aggregationFunctions map[string]string
-	if qb.language == "pt" {
-		aggregationFunctions = map[string]string{
-			"média":             "AVG(%s)",
-			"soma":              "SUM(%s)",
-			"total":             "SUM(%s)",
-			"máximo":            "MAX(%s)",
-			"maior":             "MAX(%s)",
-			"mínimo":            "MIN(%s)",
-			"menor":             "MIN(%s)",
-			"contagem":          "COUNT(%s)",
-			"contar":            "COUNT(%s)",
-			"contagem distinta": "COUNT(DISTINCT %s)",
-			"contagem única":    "COUNT(DISTINCT %s)",
-			"desvio padrão":     "STDDEV(%s)",
-			"variância":         "VARIANCE(%s)",
-			"mediana":           "PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY %s)",
-		}
-	} else {
-		aggregationFunctions = map[string]string{
-			"average":            "AVG(%s)",
-			"mean":               "AVG(%s)",
-			"sum":                "SUM(%s)",
-			"total":              "SUM(%s)",
-			"maximum":            "MAX(%s)",
-			"highest":            "MAX(%s)",
-			"minimum":            "MIN(%s)",
-			"lowest":             "MIN(%s)",
-			"count":              "COUNT(%s)",
-			"count distinct":     "COUNT(DISTINCT %s)",
-			"unique count":       "COUNT(DISTINCT %s)",
-			"standard deviation": "STDDEV(%s)",
-			"variance":           "VARIANCE(%s)",
-			"median":             "PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY %s)",
+		// Try to find a relevant table from context
+		mostRelevantTable := FindMostRelevantTable(prompt, qb.dbTables)
+		if mostRelevantTable != "" {
+			tables = append(tables, models.TableInfo{
+				Name:       mostRelevantTable,
+				Confidence: 0.6,
+			})
+		} else if len(qb.dbTables) > 0 {
+			// If we can't determine a table, return a comment
+			if qb.language == "pt" {
+				return "-- Não foi possível determinar qual tabela agrupar. Por favor, especifique a tabela em sua consulta."
+			} else {
+				return "-- Unable to determine which table to group. Please specify the table in your query."
+			}
 		}
 	}
 
-	for funcName, funcFormat := range aggregationFunctions {
-		if strings.Contains(prompt, funcName) {
-			// Find numeric columns to aggregate
-			for _, table := range qb.dbTables {
-				if table.Name == tables[0].Name {
-					for _, col := range table.Columns {
-						// Don't aggregate the grouping columns
-						if util.ContainsAny(col.Name, groupColumns) {
-							continue
-						}
+	// If we still don't have tables, we can't build the query
+	if len(tables) == 0 {
+		if qb.language == "pt" {
+			return "-- Não foi possível determinar qual tabela agrupar"
+		} else {
+			return "-- Unable to determine which table to group"
+		}
+	}
 
-						if strings.Contains(col.Type, "int") ||
-							strings.Contains(col.Type, "float") ||
-							strings.Contains(col.Type, "decimal") ||
-							strings.Contains(col.Type, "double") {
-							aggregatedCols = append(aggregatedCols,
-								fmt.Sprintf(funcFormat, col.Name))
-							break
-						}
+	// Find groupable columns
+	groupByColumns := qb.findGroupByColumns(tables, prompt)
+	if len(groupByColumns) == 0 {
+		// If no explicit GROUP BY columns, try to infer from the prompt
+		for _, table := range qb.dbTables {
+			if table.Name == tables[0].Name {
+				for _, col := range table.Columns {
+					colLower := strings.ToLower(col.Name)
+					if util.ContainsAny(colLower, []string{
+						"category", "type", "status", "group", "state", "country", "region",
+						"categoria", "tipo", "estado", "país", "região", "grupo", "classe",
+					}) {
+						groupByColumns = append(groupByColumns, col.Name)
+						break
 					}
 				}
 			}
 		}
 	}
 
-	// If no specific aggregations found, add COUNT(*)
-	if len(aggregatedCols) == 0 {
-		aggregatedCols = append(aggregatedCols, "COUNT(*) as count")
+	// Still no groupable columns, check date columns
+	if len(groupByColumns) == 0 {
+		for _, table := range qb.dbTables {
+			if table.Name == tables[0].Name {
+				for _, col := range table.Columns {
+					if strings.Contains(strings.ToLower(col.Type), "date") ||
+						strings.Contains(strings.ToLower(col.Type), "time") {
+						groupByColumns = append(groupByColumns, col.Name)
+						break
+					}
+				}
+			}
+		}
 	}
 
-	// Combine all columns for SELECT
-	selectColumns = append(selectColumns, aggregatedCols...)
+	// If we still have no columns to group by, we can't build the query
+	if len(groupByColumns) == 0 {
+		if qb.language == "pt" {
+			return "-- Não foi possível identificar colunas para agrupar em " + tables[0].Name
+		} else {
+			return "-- Unable to identify columns to group by in " + tables[0].Name
+		}
+	}
+
+	// Now find aggregatable columns
+	var aggregatableColumns []string
+	var aggregatedCols []string
+
+	for _, table := range qb.dbTables {
+		if table.Name == tables[0].Name {
+			for _, col := range table.Columns {
+				if strings.Contains(col.Type, "int") ||
+					strings.Contains(col.Type, "float") ||
+					strings.Contains(col.Type, "decimal") ||
+					strings.Contains(col.Type, "double") ||
+					strings.Contains(col.Type, "number") {
+					// Check if column is already in the group (replaces util.ContainsString)
+					isInGroup := false
+					for _, groupCol := range groupByColumns {
+						if groupCol == col.Name {
+							isInGroup = true
+							break
+						}
+					}
+
+					if !isInGroup {
+						aggregatableColumns = append(aggregatableColumns, col.Name)
+					}
+				}
+			}
+		}
+	}
+
+	// Select aggregation function based on prompt
+	aggregationFunc := "COUNT"
+	if util.ContainsAny(prompt, []string{"average", "mean", "média"}) {
+		aggregationFunc = "AVG"
+	} else if util.ContainsAny(prompt, []string{"sum", "total", "soma"}) {
+		aggregationFunc = "SUM"
+	} else if util.ContainsAny(prompt, []string{"maximum", "highest", "max", "máximo", "maior"}) {
+		aggregationFunc = "MAX"
+	} else if util.ContainsAny(prompt, []string{"minimum", "lowest", "min", "mínimo", "menor"}) {
+		aggregationFunc = "MIN"
+	}
 
 	// Build the query
-	query := fmt.Sprintf("SELECT %s FROM %s",
-		strings.Join(selectColumns, ", "),
-		tables[0].Name)
+	var selectClause string
+	if len(aggregatableColumns) > 0 && aggregationFunc != "COUNT" {
+		// Use an aggregation other than COUNT with a numeric column
+		selectClause = strings.Join(groupByColumns, ", ") + ", " + aggregationFunc + "(" + aggregatableColumns[0] + ") as aggregated_value"
+		aggregatedCols = append(aggregatedCols, "aggregated_value")
+	} else {
+		// Default to COUNT(*) aggregation
+		selectClause = strings.Join(groupByColumns, ", ") + ", COUNT(*) as count"
+		aggregatedCols = append(aggregatedCols, "count")
+	}
+
+	// Build the query with GROUP BY
+	query := "SELECT " + selectClause + " FROM " + tables[0].Name
 
 	// Add WHERE clause if needed
 	whereClause := qb.buildWhereClause(conditions)
@@ -357,55 +484,37 @@ func (qb *QueryBuilder) BuildGroupByQuery(tables []models.TableInfo, columns []m
 	}
 
 	// Add GROUP BY clause
-	query += " GROUP BY " + strings.Join(groupColumns, ", ")
+	query += " GROUP BY " + strings.Join(groupByColumns, ", ")
 
-	// Check for HAVING clause based on language
-	if qb.language == "pt" {
-		if util.ContainsAny(prompt, []string{"tendo", "com", "onde a contagem", "onde o total"}) {
-			// Try to extract having conditions
-			havingRegex := regexp.MustCompile(`(?:tendo|com)\s+(\w+)\s+(>|<|=|>=|<=)\s+(\d+)`)
-			if matches := havingRegex.FindStringSubmatch(prompt); len(matches) > 3 {
-				query += fmt.Sprintf(" HAVING %s %s %s", matches[1], matches[2], matches[3])
-			} else {
-				// Default HAVING for count queries
-				query += " HAVING COUNT(*) > 1"
-			}
+	// Add HAVING clause if requested
+	if util.ContainsAny(prompt, []string{"having", "where the", "tendo", "onde o"}) {
+		havingThreshold := "1" // Default threshold
+
+		// Try to extract a threshold value from the prompt
+		thresholdRegex := regexp.MustCompile(`(?i)(?:than|above|over|greater than|more than|acima de|maior que|mais que)\s+(\d+)`)
+		if matches := thresholdRegex.FindStringSubmatch(prompt); len(matches) > 1 {
+			havingThreshold = matches[1]
 		}
-	} else {
-		if util.ContainsAny(prompt, []string{"having", "where the count", "where the total"}) {
-			// Try to extract having conditions
-			havingRegex := regexp.MustCompile(`having\s+(\w+)\s+(>|<|=|>=|<=)\s+(\d+)`)
-			if matches := havingRegex.FindStringSubmatch(prompt); len(matches) > 3 {
-				query += fmt.Sprintf(" HAVING %s %s %s", matches[1], matches[2], matches[3])
-			} else {
-				// Default HAVING for count queries
-				query += " HAVING COUNT(*) > 1"
-			}
+
+		// Determine the appropriate aggregation function for HAVING
+		if util.ContainsAny(prompt, []string{"at least", "minimum", "pelo menos", "mínimo"}) {
+			query += " HAVING " + aggregatedCols[0] + " >= " + havingThreshold
+		} else if util.ContainsAny(prompt, []string{"at most", "maximum", "no máximo", "máximo"}) {
+			query += " HAVING " + aggregatedCols[0] + " <= " + havingThreshold
+		} else {
+			query += " HAVING " + aggregatedCols[0] + " > " + havingThreshold
 		}
 	}
 
-	// Add ORDER BY if needed based on language
-	if qb.language == "pt" {
-		if util.ContainsAny(prompt, []string{"ordenar", "classificar"}) {
-			// Try to determine if we should order by an aggregate
-			if len(aggregatedCols) > 0 &&
-				(util.ContainsAny(prompt, []string{"maior", "mais", "decrescente"}) ||
-					strings.Contains(prompt, "desc")) {
-				query += " ORDER BY " + strings.TrimLeft(aggregatedCols[0], "as ") + " DESC"
-			} else if len(aggregatedCols) > 0 {
-				query += " ORDER BY " + strings.TrimLeft(aggregatedCols[0], "as ") + " ASC"
-			}
-		}
-	} else {
-		if util.ContainsAny(prompt, []string{"order", "sort"}) {
-			// Try to determine if we should order by an aggregate
-			if len(aggregatedCols) > 0 &&
-				(util.ContainsAny(prompt, []string{"highest", "most", "largest", "descending"}) ||
-					strings.Contains(prompt, "desc")) {
-				query += " ORDER BY " + strings.TrimLeft(aggregatedCols[0], "as ") + " DESC"
-			} else if len(aggregatedCols) > 0 {
-				query += " ORDER BY " + strings.TrimLeft(aggregatedCols[0], "as ") + " ASC"
-			}
+	// Check if we should order by the aggregated value
+	if util.ContainsAny(prompt, []string{"order", "sort"}) {
+		// Try to determine if we should order by an aggregate
+		if len(aggregatedCols) > 0 &&
+			(util.ContainsAny(prompt, []string{"highest", "most", "largest", "descending"}) ||
+				strings.Contains(prompt, "desc")) {
+			query += " ORDER BY " + strings.TrimLeft(aggregatedCols[0], "as ") + " DESC"
+		} else if len(aggregatedCols) > 0 {
+			query += " ORDER BY " + strings.TrimLeft(aggregatedCols[0], "as ") + " ASC"
 		}
 	}
 
@@ -446,8 +555,25 @@ func (qb *QueryBuilder) BuildLimitQuery(tables []models.TableInfo, columns []mod
 
 // BuildDistinctQuery creates a DISTINCT query
 func (qb *QueryBuilder) BuildDistinctQuery(tables []models.TableInfo, columns []models.ColumnInfo, conditions []models.Condition, prompt string) string {
+	// Find table if none provided
 	if len(tables) == 0 {
-		return "SELECT DISTINCT * FROM users" // Fallback
+		mostRelevantTable := FindMostRelevantTable(prompt, qb.dbTables)
+		if mostRelevantTable != "" {
+			tables = append(tables, models.TableInfo{
+				Name:       mostRelevantTable,
+				Confidence: 0.7,
+			})
+		} else if len(qb.dbTables) > 0 {
+			tables = append(tables, models.TableInfo{
+				Name:       qb.dbTables[0].Name,
+				Confidence: 0.5,
+			})
+		}
+	}
+
+	// If we still don't have tables, we can't build a query
+	if len(tables) == 0 {
+		return "-- Unable to determine which table to query"
 	}
 
 	// Ensure we have columns
@@ -501,7 +627,11 @@ func (qb *QueryBuilder) BuildInsertQuery(tableName string, prompt string) string
 	}
 
 	if len(tableColumns) == 0 {
-		return fmt.Sprintf("INSERT INTO %s (column1, column2) VALUES (value1, value2)", tableName)
+		if qb.language == "pt" {
+			return fmt.Sprintf("-- Não foi possível encontrar a estrutura da tabela %s para INSERT", tableName)
+		} else {
+			return fmt.Sprintf("-- Unable to find the structure of table %s for INSERT", tableName)
+		}
 	}
 
 	// Filter out auto-increment columns
@@ -512,6 +642,15 @@ func (qb *QueryBuilder) BuildInsertQuery(tableName string, prompt string) string
 			continue
 		}
 		columns = append(columns, col.Name)
+	}
+
+	// If we don't have columns, we can't create the INSERT
+	if len(columns) == 0 {
+		if qb.language == "pt" {
+			return fmt.Sprintf("-- A tabela %s não possui colunas para INSERT", tableName)
+		} else {
+			return fmt.Sprintf("-- Table %s has no columns available for INSERT", tableName)
+		}
 	}
 
 	// Create placeholders
@@ -538,7 +677,11 @@ func (qb *QueryBuilder) BuildUpdateQuery(tableName string, conditions []models.C
 	}
 
 	if len(tableColumns) == 0 {
-		return fmt.Sprintf("UPDATE %s SET column1 = value1 WHERE id = ?", tableName)
+		if qb.language == "pt" {
+			return fmt.Sprintf("-- Não foi possível encontrar a estrutura da tabela %s para UPDATE", tableName)
+		} else {
+			return fmt.Sprintf("-- Unable to find the structure of table %s for UPDATE", tableName)
+		}
 	}
 
 	// Create SET clause with placeholders
@@ -555,22 +698,47 @@ func (qb *QueryBuilder) BuildUpdateQuery(tableName string, conditions []models.C
 		}
 	}
 
+	// If we don't have updatable columns, we can't create the UPDATE
+	if len(setClause) == 0 {
+		if qb.language == "pt" {
+			return fmt.Sprintf("-- A tabela %s não possui colunas atualizáveis", tableName)
+		} else {
+			return fmt.Sprintf("-- Table %s has no updatable columns", tableName)
+		}
+	}
+
 	// Build WHERE clause
 	var whereClause string
 	if len(conditions) > 0 {
 		whereClause = qb.buildWhereClause(conditions)
 	} else {
 		// Default to primary key condition
+		primaryKeyFound := false
 		for _, col := range tableColumns {
 			if col.IsPrimary {
 				whereClause = col.Name + " = ?"
+				primaryKeyFound = true
 				break
 			}
 		}
 
-		// If no primary key found, use id
+		// If no primary key found, try id
+		if !primaryKeyFound {
+			for _, col := range tableColumns {
+				if strings.ToLower(col.Name) == "id" {
+					whereClause = col.Name + " = ?"
+					break
+				}
+			}
+		}
+
+		// If we still don't have a WHERE clause, alert the user
 		if whereClause == "" {
-			whereClause = "id = ?"
+			if qb.language == "pt" {
+				return fmt.Sprintf("-- UPDATE em %s requer uma condição WHERE. Especifique quais registros deseja atualizar.", tableName)
+			} else {
+				return fmt.Sprintf("-- UPDATE on %s requires a WHERE condition. Please specify which records to update.", tableName)
+			}
 		}
 	}
 
@@ -587,8 +755,13 @@ func (qb *QueryBuilder) BuildDeleteQuery(tableName string, conditions []models.C
 	if len(conditions) > 0 {
 		whereClause = qb.buildWhereClause(conditions)
 	} else {
-		// Default to id condition for safety
-		whereClause = "id = ?"
+		// Don't provide a default WHERE condition, as this can be dangerous
+		// Alert the user that a WHERE condition is required
+		if qb.language == "pt" {
+			return fmt.Sprintf("-- DELETE em %s requer uma condição WHERE. Especifique quais registros deseja excluir.", tableName)
+		} else {
+			return fmt.Sprintf("-- DELETE on %s requires a WHERE condition. Please specify which records to delete.", tableName)
+		}
 	}
 
 	return fmt.Sprintf("DELETE FROM %s WHERE %s", tableName, whereClause)

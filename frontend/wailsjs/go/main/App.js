@@ -22,6 +22,10 @@ export function ExportDatabaseFile() {
   return window['go']['main']['App']['ExportDatabaseFile']();
 }
 
+export function GenerateSQLFromPrompt(arg1) {
+  return window['go']['main']['App']['GenerateSQLFromPrompt'](arg1);
+}
+
 export function GetBuildParams() {
   return window['go']['main']['App']['GetBuildParams']();
 }
@@ -56,6 +60,14 @@ export function MakeBindedSQL(arg1, arg2, arg3, arg4) {
 
 export function ReadXLSXFile() {
   return window['go']['main']['App']['ReadXLSXFile']();
+}
+
+export function RecordQueryFeedback(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['RecordQueryFeedback'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function ResetSQLAssistant() {
+  return window['go']['main']['App']['ResetSQLAssistant']();
 }
 
 export function TestBatchQueryInDatabase(arg1, arg2, arg3) {

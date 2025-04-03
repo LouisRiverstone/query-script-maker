@@ -1,6 +1,7 @@
 package operations
 
 import (
+	"regexp"
 	"strings"
 
 	"sql_script_maker/sqlai/models"
@@ -18,71 +19,207 @@ func SortTablesByConfidence(tables []models.TableInfo) {
 	}
 }
 
-// FindMostRelevantTable determines the most relevant table based on the query context
-func FindMostRelevantTable(prompt string, dbTables []models.TableForAI) string {
-	// Score each table based on context clues in the prompt
+// MakeSingular converts a word to its singular form (simplified version)
+func MakeSingular(word string) string {
+	// Basic implementation for common plurals
+	if strings.HasSuffix(word, "s") && len(word) > 2 {
+		// Don't singularize words that naturally end in 's'
+		exceptions := []string{"status", "analysis", "chassis", "bus"}
+		for _, exception := range exceptions {
+			if word == exception {
+				return word
+			}
+		}
+		return word[:len(word)-1]
+	}
+	return word
+}
+
+// MakePlural converts a word to its plural form (simplified version)
+func MakePlural(word string) string {
+	// Don't pluralize if already plural or special cases
+	if strings.HasSuffix(word, "s") {
+		return word
+	}
+
+	// Handle some special cases
+	if strings.HasSuffix(word, "y") && len(word) > 1 {
+		// Check if the letter before 'y' is a consonant
+		vowels := "aeiou"
+		lastBeforeY := word[len(word)-2]
+		if !strings.ContainsRune(vowels, rune(lastBeforeY)) {
+			return word[:len(word)-1] + "ies"
+		}
+	}
+
+	return word + "s"
+}
+
+// FindMostRelevantTable determines the most relevant table based on context clues
+func FindMostRelevantTable(prompt string, tables []models.TableForAI) string {
+	// Convert the prompt to lowercase for better matching
+	promptLower := strings.ToLower(prompt)
+
+	// Check for explicit mentions of tables first using regex
+	explicitTableRegex := regexp.MustCompile(`(?i)(?:da|de|from)\s+tabela\s+(\w+)`)
+	if matches := explicitTableRegex.FindStringSubmatch(prompt); len(matches) > 1 {
+		explicitTable := matches[1]
+		// Verify this table exists in our schema with exact match or close match
+		for _, table := range tables {
+			if strings.EqualFold(table.Name, explicitTable) {
+				return table.Name // Exact match (case-insensitive)
+			}
+		}
+
+		// Try partial match if exact match fails
+		for _, table := range tables {
+			if strings.Contains(strings.ToLower(table.Name), strings.ToLower(explicitTable)) {
+				return table.Name
+			}
+		}
+	}
+
+	// Define a scoring system for tables
+	// We'll score each table based on multiple criteria and pick the highest score
 	tableScores := make(map[string]float64)
 
-	// Look for singular/plural forms, word boundaries, etc.
-	for _, table := range dbTables {
-		tableName := strings.ToLower(table.Name)
-		singularName := strings.TrimSuffix(tableName, "s")
-		pluralName := tableName + "s"
+	// Initialize all tables with a base score
+	for _, table := range tables {
+		tableScores[table.Name] = 0.1 // Small base score
+	}
 
-		// Check for exact matches with word boundaries
-		if RegexMatch(`\b`+tableName+`\b`, prompt) {
-			tableScores[table.Name] = 1.0
-			continue
-		}
+	// List of common table names to identify in the prompt
+	// This helps with common domains where specific terms correlate to tables
+	domainTerms := map[string][]string{
+		"user":      {"usuário", "usuários", "user", "users", "cliente", "clientes", "customer", "customers", "pessoa", "pessoas", "person", "people"},
+		"product":   {"produto", "produtos", "product", "products", "item", "items", "mercadoria", "mercadorias", "merchandise"},
+		"order":     {"pedido", "pedidos", "order", "orders", "compra", "compras", "purchase", "purchases", "venda", "vendas", "sale", "sales"},
+		"category":  {"categoria", "categorias", "category", "categories", "classificação", "classificações", "classification"},
+		"payment":   {"pagamento", "pagamentos", "payment", "payments", "transação", "transações", "transaction", "transactions"},
+		"comment":   {"comentário", "comentários", "comment", "comments", "review", "reviews", "avaliação", "avaliações"},
+		"post":      {"postagem", "postagens", "post", "posts", "artigo", "artigos", "article", "articles", "publicação", "publicações", "publication"},
+		"address":   {"endereço", "endereços", "address", "addresses", "localização", "localizações", "location", "locations"},
+		"inventory": {"estoque", "estoques", "inventory", "inventories", "armazém", "armazéns", "warehouse", "warehouses"},
+		"employee":  {"funcionário", "funcionários", "employee", "employees", "trabalhador", "trabalhadores", "worker", "workers"},
+	}
 
-		// Check for singular/plural forms
-		if RegexMatch(`\b`+singularName+`\b`, prompt) {
-			tableScores[table.Name] = 0.9
-			continue
-		}
+	// Score based on domain terminology
+	for tableName, terms := range domainTerms {
+		for _, term := range terms {
+			if strings.Contains(promptLower, term) {
+				// Look for matching or related tables
+				for _, table := range tables {
+					tableLower := strings.ToLower(table.Name)
 
-		if RegexMatch(`\b`+pluralName+`\b`, prompt) {
-			tableScores[table.Name] = 0.9
-			continue
-		}
+					// Exact match with domain term
+					if tableLower == tableName {
+						tableScores[table.Name] += 2.0
+					}
 
-		// Check for partial matches
-		if strings.Contains(prompt, tableName) {
-			tableScores[table.Name] = 0.7
-		}
+					// Partial match with domain term
+					// For example, "users" table matches "user" term
+					if strings.Contains(tableLower, tableName) {
+						tableScores[table.Name] += 1.5
+					}
 
-		// Check for semantic relevance based on domain terminology
-		domainTerms := map[string][]string{
-			"user":     {"people", "person", "customer", "member", "client", "profile", "usuario", "usuário", "cliente", "pessoa"},
-			"product":  {"item", "goods", "merchandise", "stock", "produto", "mercadoria", "estoque", "item"},
-			"order":    {"purchase", "transaction", "sale", "invoice", "pedido", "compra", "venda", "transação", "fatura"},
-			"payment":  {"transaction", "invoice", "billing", "receipt", "pagamento", "fatura", "recibo", "cobrança"},
-			"category": {"group", "section", "department", "class", "type", "categoria", "grupo", "seção", "departamento", "tipo"},
-		}
-
-		for term, synonyms := range domainTerms {
-			if strings.Contains(tableName, term) {
-				for _, synonym := range synonyms {
-					if strings.Contains(prompt, synonym) {
-						tableScores[table.Name] += 0.4
+					// Related table by domain (weaker match)
+					// For example "user_address" table relates to "address" term
+					if strings.Contains(tableLower, term) {
+						tableScores[table.Name] += 1.0
 					}
 				}
 			}
 		}
 	}
 
+	// Score based on singular/plural forms of table names
+	for _, table := range tables {
+		// Try to match the table name directly
+		tableLower := strings.ToLower(table.Name)
+		singularForm := MakeSingular(tableLower)
+		pluralForm := MakePlural(tableLower)
+
+		// Check for exact matches
+		if strings.Contains(promptLower, tableLower) {
+			tableScores[table.Name] += 3.0
+		}
+
+		// Check for singular form match
+		if singularForm != tableLower && strings.Contains(promptLower, singularForm) {
+			tableScores[table.Name] += 2.5
+		}
+
+		// Check for plural form match
+		if pluralForm != tableLower && strings.Contains(promptLower, pluralForm) {
+			tableScores[table.Name] += 2.5
+		}
+	}
+
+	// Check for explicit column mentions
+	// This helps when the user mentions a column but not the table
+	columnRegex := regexp.MustCompile(`(?i)(?:a coluna|as colunas|column[s]?)\s+(\w+)`)
+	if matches := columnRegex.FindStringSubmatch(prompt); len(matches) > 1 {
+		explicitColumn := matches[1]
+
+		// Check which tables have this column
+		for _, table := range tables {
+			for _, col := range table.Columns {
+				if strings.EqualFold(col.Name, explicitColumn) {
+					tableScores[table.Name] += 2.0
+				}
+			}
+		}
+	}
+
+	// Check for operations that make one table more likely
+	insertOperations := []string{"insert", "add", "create", "inserir", "adicionar", "criar", "nova", "novo"}
+
+	// Tables that often receive these operations get a boost
+	for _, term := range insertOperations {
+		if strings.Contains(promptLower, term) {
+			// Boost tables that are commonly modified
+			for _, table := range tables {
+				tableLower := strings.ToLower(table.Name)
+				if strings.Contains(tableLower, "user") ||
+					strings.Contains(tableLower, "order") ||
+					strings.Contains(tableLower, "product") {
+					tableScores[table.Name] += 0.5
+				}
+			}
+		}
+	}
+
 	// Find the table with the highest score
+	var bestTable string
 	var highestScore float64
-	var mostRelevantTable string
 
 	for tableName, score := range tableScores {
 		if score > highestScore {
 			highestScore = score
-			mostRelevantTable = tableName
+			bestTable = tableName
 		}
 	}
 
-	return mostRelevantTable
+	// If we have a reasonable confidence (score threshold)
+	if highestScore >= 1.0 {
+		return bestTable
+	}
+
+	// If we have tables but confidence is too low, return the most generic table (often users or products)
+	if len(tables) > 0 {
+		for _, tableName := range []string{"users", "user", "products", "product", "customers", "customer"} {
+			for _, table := range tables {
+				if strings.EqualFold(table.Name, tableName) {
+					return table.Name
+				}
+			}
+		}
+
+		// If no commonly used table found, return the first table
+		return tables[0].Name
+	}
+
+	return ""
 }
 
 // SelectRelevantColumns chooses appropriate columns based on the query context

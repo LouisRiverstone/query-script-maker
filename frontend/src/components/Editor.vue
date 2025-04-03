@@ -174,7 +174,6 @@ import CodeMirror from 'vue-codemirror6';
 import { sql, MySQL } from "@codemirror/lang-sql";
 import { oneDarkTheme } from '@codemirror/theme-one-dark';
 import { MakeBindedSQL, GetLatestDatabaseStructure } from '../../wailsjs/go/main/App';
-import { database, api } from '../../wailsjs/go/models';
 import { computedAsync } from '@vueuse/core';
 import { autocompletion, CompletionContext, CompletionResult } from '@codemirror/autocomplete';
 import { EditorView, Decoration, ViewPlugin, ViewUpdate, DecorationSet } from '@codemirror/view';
@@ -182,6 +181,7 @@ import { useDebounceFn } from '@vueuse/core';
 
 import Divider from './Divider.vue';
 import SQLAssistant from './SQLAssistant.vue';
+import { main } from '../../wailsjs/go/models';
 
 const variableText = ref("{{ variable }}");
 const isDarkMode = ref(false);
@@ -627,7 +627,7 @@ const handleKeyboardShortcuts = (event: KeyboardEvent): void => {
 };
 
 const props = defineProps<{
-    variables?: Array<api.Variable>
+    variables?: Array<main.Variable>
     data?: { [key: string]: any }[]
     modelValue: string,
     showBindedSql?: boolean

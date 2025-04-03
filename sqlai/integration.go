@@ -2,12 +2,11 @@ package sqlai
 
 import (
 	"fmt"
-	"time"
-
 	"sql_script_maker/sqlai/models"
+	"time"
 )
 
-// GenerateSQLFromPrompt is the app method that interfaces with the SQL assistant
+// GenerateSQLFromPrompt is a wrapper function for apps to use
 func GenerateSQLFromPrompt(prompt string, structureJSON string) (string, error) {
 	// Initialize the assistant with the database structure
 	assistant := GetSQLAssistant()
@@ -43,5 +42,3 @@ func RecordQueryFeedback(query string, successful bool, errorMsg string, rowCoun
 		CreatedAt:     time.Now(),
 	})
 }
-
-// FeedbackResult type has been moved to models package

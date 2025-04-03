@@ -13,6 +13,10 @@ import (
 	rntm "runtime"
 	"strings"
 	"sync"
+	"time"
+
+	"sql_script_maker/sqlai"
+	sqlaiModels "sql_script_maker/sqlai/models"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
@@ -65,6 +69,17 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
 	createSqliteTables()
+}
+
+func (a *App) getSQLAssistant(structureJSON string) *sqlai.SQLAssistant {
+	assistant := sqlai.GetSQLAssistant()
+	err := assistant.Init(structureJSON)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return assistant
 }
 
 func (a *App) ReadXLSXFile() (string, error) {
@@ -1009,4 +1024,50 @@ func (a *App) GetLatestDatabaseStructure() (string, error) {
 	}
 
 	return structure, nil
+}
+
+// GenerateSQLFromPrompt is the app method that interfaces with the SQL assistant
+func (a *App) GenerateSQLFromPrompt(prompt string) (string, error) {
+	// Get the database structure from SQLite
+	structureJSON, err := a.GetLatestDatabaseStructure()
+
+	if err != nil {
+		return "", fmt.Errorf("error getting database structure: %w", err)
+	}
+
+	if structureJSON == "" {
+		return "", fmt.Errorf("database structure not found, please scan your database first")
+	}
+
+	// Initialize the assistant with the database structure
+	assistant := a.getSQLAssistant(structureJSON)
+
+	// Generate SQL from the prompt
+	sql, err := assistant.GenerateSQL(prompt)
+	if err != nil {
+		return "", fmt.Errorf("error generating SQL: %w", err)
+	}
+
+	return sql, nil
+}
+
+// ResetSQLAssistant resets the assistant's state
+func (a *App) ResetSQLAssistant() {
+	assistant := a.getSQLAssistant("")
+
+	assistant.Reset()
+}
+
+// RecordQueryFeedback records query execution feedback for learning
+func (a *App) RecordQueryFeedback(query string, successful bool, errorMsg string, rowCount int, execTime float64) {
+	assistant := a.getSQLAssistant("")
+
+	assistant.RecordQueryFeedback(sqlaiModels.FeedbackResult{
+		Query:         query,
+		WasSuccessful: successful,
+		ErrorMessage:  errorMsg,
+		RowCount:      rowCount,
+		ExecutionTime: execTime,
+		CreatedAt:     time.Now(),
+	})
 }

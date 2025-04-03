@@ -1,9 +1,8 @@
-package main
+package sqlai
 
 import (
 	"fmt"
 	"log"
-	"sql_script_maker/sqlai"
 )
 
 func main() {
@@ -45,7 +44,7 @@ func main() {
 	fmt.Println("==========================")
 
 	// Test the integration
-	sql, err := sqlai.GenerateSQLFromPrompt("Show me all users", structureJSON)
+	sql, err := GenerateSQLFromPrompt("Show me all users", structureJSON)
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
@@ -53,10 +52,10 @@ func main() {
 	fmt.Println("Generated SQL:", sql)
 
 	// Test feedback
-	sqlai.RecordQueryFeedback(sql, true, "", 5, 0.1)
+	RecordQueryFeedback(sql, true, "", 5, 0.1)
 	fmt.Println("Feedback recorded successfully")
 
 	// Test reset
-	sqlai.ResetSQLAssistant()
+	ResetSQLAssistant()
 	fmt.Println("Assistant reset successfully")
 }

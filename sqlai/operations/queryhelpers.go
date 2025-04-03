@@ -3,6 +3,7 @@ package operations
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"sql_script_maker/sqlai/models"
@@ -283,40 +284,58 @@ func (qb *QueryBuilder) generateGroupByClause(tables []models.TableInfo, prompt 
 	return ""
 }
 
-// generateLimitClause creates a LIMIT clause
+// generateLimitClause creates a LIMIT clause based on prompt analysis
 func (qb *QueryBuilder) generateLimitClause(prompt string) string {
-	// Check for specific limit values in the prompt based on language
-	var limitRegex *regexp.Regexp
-	if qb.language == "pt" {
-		limitRegex = regexp.MustCompile(`(?i)(?:(?:limitar|limite|apenas|somente|top|primeiros|primeiras))\s+(\d+)`)
-	} else {
-		limitRegex = regexp.MustCompile(`(?i)(?:top|first|limit|limited to|top|first)\s+(\d+)`)
+	// Check for explicit limit patterns in different languages
+	limitRegexes := []*regexp.Regexp{
+		regexp.MustCompile(`(?i)limit\s+(\d+)`),
+		regexp.MustCompile(`(?i)limitar\s+(?:a|para|em)?\s*(\d+)`),
+		regexp.MustCompile(`(?i)(?:mostrar|exibir|retornar|trazer)\s+(?:apenas\s+)?(\d+)`),
+		regexp.MustCompile(`(?i)(?:top|primeiros|primeiras|apenas)\s+(\d+)`),
+		regexp.MustCompile(`(?i)(\d+)\s+(?:registros|linhas|resultados|itens)`),
 	}
 
-	if matches := limitRegex.FindStringSubmatch(prompt); len(matches) > 1 {
-		return "LIMIT " + matches[1]
-	}
-
-	// Infer sensible limit based on context and language
-	if qb.language == "pt" {
-		if util.ContainsAny(prompt, []string{"um", "uma", "único", "única"}) {
-			return "LIMIT 1"
-		} else if util.ContainsAny(prompt, []string{"alguns", "algumas", "poucos", "poucas"}) {
-			return "LIMIT 5"
-		} else if util.ContainsAny(prompt, []string{"recentes", "últimos", "mais novos"}) {
-			return "LIMIT 10"
-		}
-	} else {
-		if util.ContainsAny(prompt, []string{"one", "a single"}) {
-			return "LIMIT 1"
-		} else if util.ContainsAny(prompt, []string{"few", "some"}) {
-			return "LIMIT 5"
-		} else if util.ContainsAny(prompt, []string{"latest", "recent", "newest"}) {
-			return "LIMIT 10"
+	for _, regex := range limitRegexes {
+		if matches := regex.FindStringSubmatch(prompt); len(matches) > 1 {
+			limitStr := matches[1]
+			if limit, err := strconv.Atoi(limitStr); err == nil {
+				// Make sure the limit is reasonable (between 1 and 1000)
+				if limit < 1 {
+					limit = 1
+				} else if limit > 1000 {
+					limit = 1000
+				}
+				return fmt.Sprintf("LIMIT %d", limit)
+			}
 		}
 	}
 
-	return ""
+	// Check for keywords indicating small result sets
+	smallLimitKeywords := []string{"pequeno", "poucos", "exemplo", "amostra", "small", "few", "example", "sample"}
+	for _, keyword := range smallLimitKeywords {
+		if strings.Contains(strings.ToLower(prompt), keyword) {
+			return "LIMIT 10"
+		}
+	}
+
+	// Check for keywords indicating larger result sets but still limited
+	mediumLimitKeywords := []string{"vários", "diversos", "alguns", "many", "several", "some"}
+	for _, keyword := range mediumLimitKeywords {
+		if strings.Contains(strings.ToLower(prompt), keyword) {
+			return "LIMIT 50"
+		}
+	}
+
+	// Check for keywords indicating very large result sets
+	largeLimitKeywords := []string{"todos", "todas", "completo", "completa", "all", "complete", "full"}
+	for _, keyword := range largeLimitKeywords {
+		if strings.Contains(strings.ToLower(prompt), keyword) {
+			return "LIMIT 1000"
+		}
+	}
+
+	// Default to a reasonable limit if no specific indication
+	return "LIMIT 100"
 }
 
 // findRelatedTable finds a table related to the given table
