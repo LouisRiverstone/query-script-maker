@@ -38,7 +38,7 @@
             </div>
             
             <!-- Database browser -->
-            <div v-else>
+            <div class="h-[calc(100vh-188px)]" v-else>
                 <!-- Header with database info -->
                 <div class="bg-gradient-to-r from-indigo-600 to-indigo-800 dark:from-indigo-800 dark:to-indigo-900 px-4 py-5 sm:px-6 text-white shadow-lg">
                     <div class="flex flex-col sm:flex-row justify-between">

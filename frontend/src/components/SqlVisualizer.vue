@@ -33,7 +33,7 @@ import Editor from './Editor.vue';
 import Button from './Button.vue';
 
 // Lazy load SqlDiagram component
-const SqlDiagram = defineAsyncComponent(() => 
+const SqlDiagram = defineAsyncComponent<typeof import('./SqlDiagram.vue').default>(() => 
   import('./SqlDiagram.vue').then(mod => {
     // Delay returning the component slightly to ensure smooth loading
     return new Promise(resolve => {
@@ -50,7 +50,7 @@ const props = defineProps<{
 const sqlQuery = ref(props.initialQuery || '');
 const diagramQuery = ref('');
 const originalQuery = ref(props.initialQuery || '');
-const databaseStructure = computed(() => props.databaseStructure || '');
+const databaseStructure = computed<string>(() => props.databaseStructure || '');
 
 // Debounce function to prevent excessive updates
 const debounce = (fn: Function, delay: number) => {
@@ -95,7 +95,7 @@ onMounted(() => {
   }
 });
 
-// Watch for changes to initialQuery with throttling
+// Watch for changes to initialQuery without throttling
 watch(() => props.initialQuery, (newQuery) => {
   if (newQuery) {
     originalQuery.value = newQuery;
@@ -103,7 +103,7 @@ watch(() => props.initialQuery, (newQuery) => {
     // Immediately visualize when initialQuery changes
     visualize();
   }
-}, { throttle: 200 });
+});
 
 // Clean up event listeners and timers
 onBeforeUnmount(() => {

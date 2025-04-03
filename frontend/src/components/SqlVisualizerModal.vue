@@ -99,7 +99,7 @@ const fetchDatabaseStructure = async () => {
       }
     } catch (error) {
       // Only log errors that aren't from aborted requests
-      if (error.name !== 'AbortError') {
+      if (error && typeof error === 'object' && 'name' in error && error.name !== 'AbortError') {
         console.error('Error fetching database structure:', error);
       }
     } finally {

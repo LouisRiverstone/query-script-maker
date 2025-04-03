@@ -115,7 +115,7 @@ import Button from './Button.vue';
 import { GetLatestDatabaseStructure, GetDatabaseConnection, GetDatabaseStructure } from '../../wailsjs/go/main/App';
 
 // Lazy load the DatabaseDiagram component
-const DatabaseDiagram = defineAsyncComponent(() => 
+const DatabaseDiagram = defineAsyncComponent<typeof import('./DatabaseDiagram.vue').default>(() => 
   import('./DatabaseDiagram.vue').then(module => {
     // Add artificial delay to ensure smoother loading UX
     return new Promise(resolve => {
@@ -205,7 +205,7 @@ const refreshDiagram = async () => {
         return;
       }
     } catch (error) {
-      if (error.name !== 'AbortError') {
+      if (error && typeof error === 'object' && 'name' in error && error.name !== 'AbortError') {
         console.log('Could not refresh from database directly, using cached structure');
       }
     }
@@ -214,7 +214,7 @@ const refreshDiagram = async () => {
     const newStructure = await GetLatestDatabaseStructure();
     emit('refresh', newStructure);
   } catch (error) {
-    if (error.name !== 'AbortError') {
+    if (error && typeof error === 'object' && 'name' in error && error.name !== 'AbortError') {
       console.error('Error refreshing database structure:', error);
     }
   } finally {

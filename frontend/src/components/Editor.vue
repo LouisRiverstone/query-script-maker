@@ -152,7 +152,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, watch, onMounted, computed, onUnmounted } from 'vue';
+import { ref, watch, onMounted, computed, onUnmounted, shallowRef } from 'vue';
 import CodeMirror from 'vue-codemirror6';
 import { sql, MySQL } from "@codemirror/lang-sql";
 import { oneDarkTheme } from '@codemirror/theme-one-dark';
@@ -161,6 +161,7 @@ import { main } from '../../wailsjs/go/models';
 import { computedAsync } from '@vueuse/core';
 import { autocompletion, CompletionContext, CompletionResult } from '@codemirror/autocomplete';
 import { EditorView, Decoration, ViewPlugin, ViewUpdate, DecorationSet } from '@codemirror/view';
+import { useDebounceFn } from '@vueuse/core';
 
 import Divider from './Divider.vue';
 
@@ -181,38 +182,173 @@ interface QueryHistoryItem {
 const HISTORY_STORAGE_KEY = 'sql_query_history';
 const queryHistory = ref<QueryHistoryItem[]>([]);
 
-// Carregar histórico do localStorage
-const loadQueryHistory = () => {
-  try {
-    const savedHistory = localStorage.getItem(HISTORY_STORAGE_KEY);
-    if (savedHistory) {
-      queryHistory.value = JSON.parse(savedHistory);
+// SQL keywords for autocomplete - Moved outside of component setup to prevent recreating on every render
+const sqlKeywordsSource = [
+  // Common SQL Commands
+  { label: "SELECT", type: "keyword", info: "Retrieves data from a database" },
+  { label: "FROM", type: "keyword", info: "Specifies which table to select or delete data from" },
+  { label: "WHERE", type: "keyword", info: "Filters records based on a condition" },
+  { label: "INSERT INTO", type: "keyword", info: "Inserts new data into a database" },
+  { label: "UPDATE", type: "keyword", info: "Modifies existing database data" },
+  { label: "DELETE", type: "keyword", info: "Deletes data from a database" },
+  { label: "CREATE", type: "keyword", info: "Creates a new database object (table, view, etc.)" },
+  { label: "ALTER", type: "keyword", info: "Modifies an existing database object" },
+  { label: "DROP", type: "keyword", info: "Deletes an existing database object" },
+  { label: "TRUNCATE", type: "keyword", info: "Removes all records from a table, but not the table itself" },
+  { label: "RENAME", type: "keyword", info: "Renames a database object" },
+  { label: "SHOW", type: "keyword", info: "Shows information about databases, tables, columns, or status" },
+  { label: "DESCRIBE", type: "keyword", info: "Shows the structure of a table" },
+  { label: "EXPLAIN", type: "keyword", info: "Shows the execution plan for a query" },
+  { label: "USE", type: "keyword", info: "Selects a database" },
+  
+  // Join Types
+  { label: "JOIN", type: "keyword", info: "Combines rows from two or more tables" },
+  { label: "LEFT JOIN", type: "keyword", info: "Returns all records from the left table, and matched records from the right table" },
+  { label: "RIGHT JOIN", type: "keyword", info: "Returns all records from the right table, and matched records from the left table" },
+  { label: "INNER JOIN", type: "keyword", info: "Returns records that have matching values in both tables" },
+  { label: "CROSS JOIN", type: "keyword", info: "Returns the Cartesian product of two tables" },
+  { label: "NATURAL JOIN", type: "keyword", info: "Joins tables by automatically finding matching column names" },
+  { label: "FULL JOIN", type: "keyword", info: "Returns all records when there is a match in either left or right table" },
+  { label: "SELF JOIN", type: "keyword", info: "Joins a table to itself" },
+  
+  // Clauses
+  { label: "GROUP BY", type: "keyword", info: "Groups rows that have the same values into summary rows" },
+  { label: "HAVING", type: "keyword", info: "Filters records after GROUP BY is applied" },
+  { label: "ORDER BY", type: "keyword", info: "Sorts the result set in ascending or descending order" },
+  { label: "LIMIT", type: "keyword", info: "Limits the number of records returned" },
+  { label: "OFFSET", type: "keyword", info: "Specifies where to start selecting records" },
+  { label: "UNION", type: "keyword", info: "Combines the result sets of two or more SELECT statements" },
+  { label: "UNION ALL", type: "keyword", info: "Combines the result sets of two or more SELECT statements (allows duplicates)" },
+  { label: "INTERSECT", type: "keyword", info: "Returns the records that both queries have" },
+  { label: "EXCEPT", type: "keyword", info: "Returns the records from the first query that are not in the second query" },
+  { label: "WITH", type: "keyword", info: "Specifies temporary named result sets (Common Table Expressions)" },
+  
+  // Common Functions and Keywords - Adding just a subset for performance
+  { label: "COUNT()", type: "function", info: "Returns the number of rows" },
+  { label: "SUM()", type: "function", info: "Returns the sum of values" },
+  { label: "AVG()", type: "function", info: "Returns the average value" },
+  { label: "MIN()", type: "function", info: "Returns the minimum value" },
+  { label: "MAX()", type: "function", info: "Returns the maximum value" },
+  { label: "CASE", type: "keyword", info: "Evaluates conditions and returns a value when the first condition is met" },
+  { label: "WHEN", type: "keyword", info: "Used in a CASE statement to specify a condition" },
+  { label: "THEN", type: "keyword", info: "Used in a CASE statement to specify a result" },
+  { label: "ELSE", type: "keyword", info: "Used in a CASE statement to specify a value to return if all conditions are false" },
+  { label: "END", type: "keyword", info: "Used in a CASE statement to end the list of conditions" }
+];
+
+// Memoize expensive operations
+const loadDatabaseStructure = async () => {
+    try {
+        // Check if we already have the structure
+        if (databaseStructure.value && databaseStructure.value.tables.length > 0) {
+            console.log("Using cached database structure");
+            return;
+        }
+        
+        console.log("Loading database structure...");
+        const structure = await GetLatestDatabaseStructure();
+        if (structure) {
+            const parsed = JSON.parse(structure) as DatabaseStructure;
+            databaseStructure.value = parsed;
+            
+            // Process structure to create completions only once
+            if (parsed && parsed.tables) {
+                // Create table completions
+                const tables = parsed.tables.map(table => ({
+                    label: table.name,
+                    type: "table",
+                    detail: `Table with ${table.columns.length} columns`,
+                    info: `Table: ${table.name}`,
+                    boost: 99
+                }));
+                
+                // Create column completions grouped by table
+                const columns: any[] = [];
+                parsed.tables.forEach(table => {
+                    table.columns.forEach(column => {
+                        columns.push({
+                            label: column.name,
+                            type: "column",
+                            detail: `${table.name}.${column.name}`,
+                            info: `Column: ${column.name} (${column.type})${column.isPrimary ? ' [PK]' : ''}`,
+                            apply: column.name, 
+                            boost: column.isPrimary ? 95 : 90,
+                            table: table.name
+                        });
+                        
+                        // Only add qualified columns for primary keys and frequently used columns to reduce size
+                        if (column.isPrimary || column.name.toLowerCase().includes('id') || column.name.toLowerCase().includes('name')) {
+                            columns.push({
+                                label: `${table.name}.${column.name}`,
+                                type: "qualified-column",
+                                detail: `${table.name}.${column.name}`,
+                                info: `Column: ${column.name} (${column.type})${column.isPrimary ? ' [PK]' : ''}`,
+                                apply: `${table.name}.${column.name}`,
+                                boost: column.isPrimary ? 85 : 80
+                            });
+                        }
+                    });
+                });
+                
+                // Use shallowRef to avoid deep reactivity costs
+                tableCompletions.value = tables;
+                columnCompletions.value = columns;
+            }
+        }
+    } catch (error) {
+        console.error("Error loading database structure:", error);
     }
-  } catch (error) {
-    console.error("Error loading query history:", error);
-    queryHistory.value = [];
-  }
 };
 
-// Salvar consulta atual no histórico
+// Carregar histórico do localStorage com memoização
+let cachedHistory: QueryHistoryItem[] | null = null;
+
+const loadQueryHistory = () => {
+    if (cachedHistory !== null) {
+        queryHistory.value = cachedHistory;
+        return;
+    }
+    
+    try {
+        const savedHistory = localStorage.getItem(HISTORY_STORAGE_KEY);
+        if (savedHistory) {
+            const parsed = JSON.parse(savedHistory);
+            queryHistory.value = parsed;
+            cachedHistory = parsed;
+        }
+    } catch (error) {
+        console.error("Error loading query history:", error);
+        queryHistory.value = [];
+        cachedHistory = [];
+    }
+};
+
+// Salvar consulta atual no histórico - com otimização para evitar atualizações desnecessárias
 const saveToHistory = () => {
-  if (value.value.trim()) {
+    if (!value.value.trim()) return;
+    
     // Evitar duplicatas recentes
     const isDuplicate = queryHistory.value.some(item => 
-      item.text === value.value && 
-      (Date.now() - item.timestamp) < 60000 // 1 minuto
+        item.text === value.value && 
+        (Date.now() - item.timestamp) < 60000 // 1 minuto
     );
     
     if (!isDuplicate) {
-      const newItem: QueryHistoryItem = {
-        text: value.value,
-        timestamp: Date.now()
-      };
-      
-      queryHistory.value = [newItem, ...queryHistory.value].slice(0, 20); // Manter no máximo 20 itens
-      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(queryHistory.value));
+        const newItem: QueryHistoryItem = {
+            text: value.value,
+            timestamp: Date.now()
+        };
+        
+        // Limitar o histórico a 20 itens para melhor desempenho
+        const newHistory = [newItem, ...queryHistory.value].slice(0, 20);
+        queryHistory.value = newHistory;
+        cachedHistory = newHistory;
+        
+        // Usar localStorage em um setTimeout para não bloquear a UI
+        setTimeout(() => {
+            localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(newHistory));
+        }, 0);
     }
-  }
 };
 
 // Carregar consulta do histórico
@@ -377,61 +513,12 @@ interface DatabaseStructure {
   tables: DatabaseTable[];
 }
 
-// Variables for table and column autocomplete
-const databaseStructure = ref<DatabaseStructure | null>(null);
-const tableCompletions = ref<any[]>([]);
-const columnCompletions = ref<any[]>([]);
-
-// Load database structure on component mount
-const loadDatabaseStructure = async () => {
-  try {
-    const structure = await GetLatestDatabaseStructure();
-    if (structure) {
-      databaseStructure.value = JSON.parse(structure) as DatabaseStructure;
-      
-      // Process structure to create completions
-      if (databaseStructure.value && databaseStructure.value.tables) {
-        // Create table completions
-        tableCompletions.value = databaseStructure.value.tables.map(table => ({
-          label: table.name,
-          type: "table",
-          detail: `Table with ${table.columns.length} columns`,
-          info: `Table: ${table.name}`,
-          boost: 99
-        }));
-        
-        // Create column completions grouped by table
-        const columns: any[] = [];
-        databaseStructure.value.tables.forEach(table => {
-          table.columns.forEach(column => {
-            columns.push({
-              label: column.name,
-              type: "column",
-              detail: `${table.name}.${column.name}`,
-              info: `Column: ${column.name} (${column.type})${column.isPrimary ? ' [PK]' : ''}`,
-              apply: column.name, 
-              boost: column.isPrimary ? 95 : 90,
-              table: table.name
-            });
-            
-            // Also add tablename.columnname format
-            columns.push({
-              label: `${table.name}.${column.name}`,
-              type: "qualified-column",
-              detail: `${table.name}.${column.name}`,
-              info: `Column: ${column.name} (${column.type})${column.isPrimary ? ' [PK]' : ''}`,
-              apply: `${table.name}.${column.name}`,
-              boost: column.isPrimary ? 85 : 80
-            });
-          });
-        });
-        columnCompletions.value = columns;
-      }
-    }
-  } catch (error) {
-    console.error("Error loading database structure:", error);
-  }
-};
+// Variables for table and column autocomplete - using shallowRef for better performance with large objects
+const databaseStructure = shallowRef<DatabaseStructure | null>(null);
+const tableCompletions = shallowRef<any[]>([]);
+const columnCompletions = shallowRef<any[]>([]);
+// Use shallowRef for large static array to prevent deep reactivity costs
+const sqlKeywords = shallowRef(sqlKeywordsSource);
 
 // Função para fechar menus quando clica fora
 const handleClickOutside = (event: MouseEvent): void => {
@@ -454,7 +541,7 @@ onMounted(() => {
     // Initial check
     updateDarkMode();
     
-    // Watch for changes in dark mode
+    // Watch for changes in dark mode - use passive listeners for better performance
     darkModeObserver = new MutationObserver(updateDarkMode);
     
     // Observe changes to the class attribute of both html and body elements
@@ -469,7 +556,7 @@ onMounted(() => {
     });
     
     // Listen for system preference changes
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateDarkMode);
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateDarkMode, { passive: true });
     
     // Load database structure
     loadDatabaseStructure();
@@ -477,11 +564,11 @@ onMounted(() => {
     // Load query history
     loadQueryHistory();
     
-    // Close menus when clicking outside
-    document.addEventListener('click', handleClickOutside);
+    // Close menus when clicking outside - use passive and capture for performance
+    document.addEventListener('click', handleClickOutside, { passive: true });
     
     // Configure global keyboard shortcuts
-    document.addEventListener('keydown', handleKeyboardShortcuts);
+    document.addEventListener('keydown', handleKeyboardShortcuts, { passive: false });
 });
 
 onUnmounted(() => {
@@ -536,297 +623,6 @@ const lang = sql({
     dialect: MySQL
 });
 
-// SQL keywords for autocomplete
-const sqlKeywords = [
-  // Common SQL Commands
-  { label: "SELECT", type: "keyword", info: "Retrieves data from a database" },
-  { label: "FROM", type: "keyword", info: "Specifies which table to select or delete data from" },
-  { label: "WHERE", type: "keyword", info: "Filters records based on a condition" },
-  { label: "INSERT INTO", type: "keyword", info: "Inserts new data into a database" },
-  { label: "UPDATE", type: "keyword", info: "Modifies existing database data" },
-  { label: "DELETE", type: "keyword", info: "Deletes data from a database" },
-  { label: "CREATE", type: "keyword", info: "Creates a new database object (table, view, etc.)" },
-  { label: "ALTER", type: "keyword", info: "Modifies an existing database object" },
-  { label: "DROP", type: "keyword", info: "Deletes an existing database object" },
-  { label: "TRUNCATE", type: "keyword", info: "Removes all records from a table, but not the table itself" },
-  { label: "RENAME", type: "keyword", info: "Renames a database object" },
-  { label: "SHOW", type: "keyword", info: "Shows information about databases, tables, columns, or status" },
-  { label: "DESCRIBE", type: "keyword", info: "Shows the structure of a table" },
-  { label: "EXPLAIN", type: "keyword", info: "Shows the execution plan for a query" },
-  { label: "USE", type: "keyword", info: "Selects a database" },
-  
-  // Join Types
-  { label: "JOIN", type: "keyword", info: "Combines rows from two or more tables" },
-  { label: "LEFT JOIN", type: "keyword", info: "Returns all records from the left table, and matched records from the right table" },
-  { label: "RIGHT JOIN", type: "keyword", info: "Returns all records from the right table, and matched records from the left table" },
-  { label: "INNER JOIN", type: "keyword", info: "Returns records that have matching values in both tables" },
-  { label: "CROSS JOIN", type: "keyword", info: "Returns the Cartesian product of two tables" },
-  { label: "NATURAL JOIN", type: "keyword", info: "Joins tables by automatically finding matching column names" },
-  { label: "FULL JOIN", type: "keyword", info: "Returns all records when there is a match in either left or right table" },
-  { label: "SELF JOIN", type: "keyword", info: "Joins a table to itself" },
-  
-  // Clauses
-  { label: "GROUP BY", type: "keyword", info: "Groups rows that have the same values into summary rows" },
-  { label: "HAVING", type: "keyword", info: "Filters records after GROUP BY is applied" },
-  { label: "ORDER BY", type: "keyword", info: "Sorts the result set in ascending or descending order" },
-  { label: "LIMIT", type: "keyword", info: "Limits the number of records returned" },
-  { label: "OFFSET", type: "keyword", info: "Specifies where to start selecting records" },
-  { label: "UNION", type: "keyword", info: "Combines the result sets of two or more SELECT statements" },
-  { label: "UNION ALL", type: "keyword", info: "Combines the result sets of two or more SELECT statements (allows duplicates)" },
-  { label: "INTERSECT", type: "keyword", info: "Returns the records that both queries have" },
-  { label: "EXCEPT", type: "keyword", info: "Returns the records from the first query that are not in the second query" },
-  { label: "WITH", type: "keyword", info: "Specifies temporary named result sets (Common Table Expressions)" },
-  
-  // Operators
-  { label: "AND", type: "operator", info: "Logical AND operator" },
-  { label: "OR", type: "operator", info: "Logical OR operator" },
-  { label: "NOT", type: "operator", info: "Logical NOT operator" },
-  { label: "IN", type: "operator", info: "Specifies multiple possible values for a column" },
-  { label: "NOT IN", type: "operator", info: "Specifies values that are not in a list of values" },
-  { label: "BETWEEN", type: "operator", info: "Selects values within a given range" },
-  { label: "NOT BETWEEN", type: "operator", info: "Selects values outside a given range" },
-  { label: "LIKE", type: "operator", info: "Searches for a specified pattern in a column" },
-  { label: "NOT LIKE", type: "operator", info: "Searches for values that don't match a pattern" },
-  { label: "REGEXP", type: "operator", info: "Matches a string against a regular expression pattern" },
-  { label: "IS NULL", type: "operator", info: "Tests for NULL values" },
-  { label: "IS NOT NULL", type: "operator", info: "Tests for non-NULL values" },
-  { label: "EXISTS", type: "operator", info: "Tests for the existence of records in a subquery" },
-  { label: "ANY", type: "operator", info: "Compares a value to any value in a list" },
-  { label: "ALL", type: "operator", info: "Compares a value to all values in a list" },
-  { label: "SOME", type: "operator", info: "Same as ANY" },
-  
-  // Aggregate Functions
-  { label: "COUNT()", type: "function", info: "Returns the number of rows" },
-  { label: "COUNT(DISTINCT)", type: "function", info: "Returns the number of distinct values" },
-  { label: "SUM()", type: "function", info: "Returns the sum of values" },
-  { label: "AVG()", type: "function", info: "Returns the average value" },
-  { label: "MIN()", type: "function", info: "Returns the minimum value" },
-  { label: "MAX()", type: "function", info: "Returns the maximum value" },
-  { label: "GROUP_CONCAT()", type: "function", info: "Returns a concatenated string of values" },
-  { label: "STD()", type: "function", info: "Returns the standard deviation" },
-  { label: "STDDEV()", type: "function", info: "Returns the standard deviation" },
-  { label: "STDDEV_POP()", type: "function", info: "Returns the population standard deviation" },
-  { label: "STDDEV_SAMP()", type: "function", info: "Returns the sample standard deviation" },
-  { label: "VAR_POP()", type: "function", info: "Returns the population variance" },
-  { label: "VAR_SAMP()", type: "function", info: "Returns the sample variance" },
-  { label: "VARIANCE()", type: "function", info: "Returns the variance" },
-  { label: "BIT_AND()", type: "function", info: "Returns the bitwise AND of all bits in a group" },
-  { label: "BIT_OR()", type: "function", info: "Returns the bitwise OR of all bits in a group" },
-  { label: "BIT_XOR()", type: "function", info: "Returns the bitwise XOR of all bits in a group" },
-  { label: "JSON_ARRAYAGG()", type: "function", info: "Returns a JSON array containing values from a group" },
-  { label: "JSON_OBJECTAGG()", type: "function", info: "Returns a JSON object containing key-value pairs from a group" },
-  
-  // String Functions
-  { label: "CONCAT()", type: "function", info: "Adds two or more strings together" },
-  { label: "CONCAT_WS()", type: "function", info: "Adds two or more strings together with a separator" },
-  { label: "SUBSTRING()", type: "function", info: "Extracts a string of characters from a string" },
-  { label: "SUBSTR()", type: "function", info: "Extracts a substring from a string (alias for SUBSTRING)" },
-  { label: "TRIM()", type: "function", info: "Removes leading and trailing spaces from a string" },
-  { label: "LTRIM()", type: "function", info: "Removes leading spaces from a string" },
-  { label: "RTRIM()", type: "function", info: "Removes trailing spaces from a string" },
-  { label: "UPPER()", type: "function", info: "Converts a string to upper case" },
-  { label: "LOWER()", type: "function", info: "Converts a string to lower case" },
-  { label: "LCASE()", type: "function", info: "Converts a string to lower case (alias for LOWER)" },
-  { label: "UCASE()", type: "function", info: "Converts a string to upper case (alias for UPPER)" },
-  { label: "LENGTH()", type: "function", info: "Returns the length of a string" },
-  { label: "CHAR_LENGTH()", type: "function", info: "Returns the number of characters in a string" },
-  { label: "CHARACTER_LENGTH()", type: "function", info: "Returns the number of characters in a string" },
-  { label: "REPLACE()", type: "function", info: "Replaces all occurrences of a substring within a string" },
-  { label: "REVERSE()", type: "function", info: "Reverses a string" },
-  { label: "REPEAT()", type: "function", info: "Repeats a string a specified number of times" },
-  { label: "INSERT()", type: "function", info: "Inserts a substring at the specified position" },
-  { label: "LEFT()", type: "function", info: "Returns the leftmost characters from a string" },
-  { label: "RIGHT()", type: "function", info: "Returns the rightmost characters from a string" },
-  { label: "LOCATE()", type: "function", info: "Returns the position of a substring in a string" },
-  { label: "POSITION()", type: "function", info: "Returns the position of a substring in a string" },
-  { label: "INSTR()", type: "function", info: "Returns the position of a substring in a string" },
-  { label: "LPAD()", type: "function", info: "Left-pads a string with another string" },
-  { label: "RPAD()", type: "function", info: "Right-pads a string with another string" },
-  { label: "SPACE()", type: "function", info: "Returns a string of the specified number of spaces" },
-  { label: "ELT()", type: "function", info: "Returns the string at the specified position" },
-  { label: "FIELD()", type: "function", info: "Returns the index position of a value in a list" },
-  { label: "FIND_IN_SET()", type: "function", info: "Returns the position of a string in a comma-separated list" },
-  { label: "FORMAT()", type: "function", info: "Formats a number to a format like '#,###,###.##'" },
-  { label: "HEX()", type: "function", info: "Converts a value to hexadecimal" },
-  { label: "UNHEX()", type: "function", info: "Converts a hexadecimal value to a string" },
-  { label: "BIN()", type: "function", info: "Returns a binary representation of a number" },
-  { label: "OCT()", type: "function", info: "Returns an octal representation of a number" },
-  { label: "ASCII()", type: "function", info: "Returns the ASCII value of the leftmost character" },
-  { label: "ORD()", type: "function", info: "Returns the character code for the leftmost character" },
-  { label: "SOUNDEX()", type: "function", info: "Returns a soundex string for a given string" },
-  
-  // Date Functions
-  { label: "NOW()", type: "function", info: "Returns the current date and time" },
-  { label: "SYSDATE()", type: "function", info: "Returns the current date and time" },
-  { label: "CURDATE()", type: "function", info: "Returns the current date" },
-  { label: "CURRENT_DATE()", type: "function", info: "Returns the current date" },
-  { label: "CURTIME()", type: "function", info: "Returns the current time" },
-  { label: "CURRENT_TIME()", type: "function", info: "Returns the current time" },
-  { label: "CURRENT_TIMESTAMP()", type: "function", info: "Returns the current date and time" },
-  { label: "LOCALTIME()", type: "function", info: "Returns the current date and time" },
-  { label: "LOCALTIMESTAMP()", type: "function", info: "Returns the current date and time" },
-  { label: "UTC_DATE()", type: "function", info: "Returns the current UTC date" },
-  { label: "UTC_TIME()", type: "function", info: "Returns the current UTC time" },
-  { label: "UTC_TIMESTAMP()", type: "function", info: "Returns the current UTC date and time" },
-  { label: "YEAR()", type: "function", info: "Returns the year part of a date" },
-  { label: "MONTH()", type: "function", info: "Returns the month part of a date" },
-  { label: "DAY()", type: "function", info: "Returns the day part of a date" },
-  { label: "HOUR()", type: "function", info: "Returns the hour part of a time" },
-  { label: "MINUTE()", type: "function", info: "Returns the minute part of a time" },
-  { label: "SECOND()", type: "function", info: "Returns the second part of a time" },
-  { label: "MICROSECOND()", type: "function", info: "Returns the microsecond part of a time" },
-  { label: "DATE_FORMAT()", type: "function", info: "Formats a date as specified" },
-  { label: "TIME_FORMAT()", type: "function", info: "Formats a time as specified" },
-  { label: "DATE_ADD()", type: "function", info: "Adds a time/date interval to a date" },
-  { label: "ADDDATE()", type: "function", info: "Adds a time/date interval to a date" },
-  { label: "DATE_SUB()", type: "function", info: "Subtracts a time/date interval from a date" },
-  { label: "SUBDATE()", type: "function", info: "Subtracts a time/date interval from a date" },
-  { label: "ADDTIME()", type: "function", info: "Adds a time interval to a time" },
-  { label: "SUBTIME()", type: "function", info: "Subtracts a time interval from a time" },
-  { label: "DATEDIFF()", type: "function", info: "Returns the difference in days between two dates" },
-  { label: "TIMEDIFF()", type: "function", info: "Returns the difference between two times" },
-  { label: "DATE()", type: "function", info: "Extracts the date part of a date or datetime" },
-  { label: "TIME()", type: "function", info: "Extracts the time part of a time or datetime" },
-  { label: "TIMESTAMP()", type: "function", info: "Returns a datetime value" },
-  { label: "CONVERT_TZ()", type: "function", info: "Converts a datetime from one timezone to another" },
-  { label: "EXTRACT()", type: "function", info: "Extracts a part of a date" },
-  { label: "MAKEDATE()", type: "function", info: "Creates a date from a year and day value" },
-  { label: "MAKETIME()", type: "function", info: "Creates a time from hour, minute, and second values" },
-  { label: "TO_DAYS()", type: "function", info: "Converts a date to the number of days since year 0" },
-  { label: "FROM_DAYS()", type: "function", info: "Converts a day number to a date" },
-  { label: "TO_SECONDS()", type: "function", info: "Converts a date to the number of seconds since year 0" },
-  { label: "FROM_UNIXTIME()", type: "function", info: "Converts a Unix timestamp to a date" },
-  { label: "UNIX_TIMESTAMP()", type: "function", info: "Returns the Unix timestamp for a date" },
-  { label: "SEC_TO_TIME()", type: "function", info: "Converts seconds to a time" },
-  { label: "TIME_TO_SEC()", type: "function", info: "Converts a time to seconds" },
-  { label: "DAYOFWEEK()", type: "function", info: "Returns the day of the week for a date" },
-  { label: "WEEKDAY()", type: "function", info: "Returns the weekday index for a date" },
-  { label: "DAYOFMONTH()", type: "function", info: "Returns the day of the month for a date" },
-  { label: "DAYOFYEAR()", type: "function", info: "Returns the day of the year for a date" },
-  { label: "DAYNAME()", type: "function", info: "Returns the name of the day for a date" },
-  { label: "MONTHNAME()", type: "function", info: "Returns the name of the month for a date" },
-  { label: "QUARTER()", type: "function", info: "Returns the quarter for a date" },
-  { label: "WEEK()", type: "function", info: "Returns the week number for a date" },
-  { label: "WEEKOFYEAR()", type: "function", info: "Returns the week number for a date" },
-  { label: "YEARWEEK()", type: "function", info: "Returns year and week for a date" },
-  { label: "LAST_DAY()", type: "function", info: "Returns the last day of the month for a date" },
-  
-  // Control Flow Functions
-  { label: "CASE", type: "keyword", info: "Evaluates a list of conditions and returns a value when the first condition is met" },
-  { label: "WHEN", type: "keyword", info: "Used in a CASE statement to specify a condition" },
-  { label: "THEN", type: "keyword", info: "Used in a CASE statement to specify a result" },
-  { label: "ELSE", type: "keyword", info: "Used in a CASE statement to specify a value to return if all conditions are false" },
-  { label: "END", type: "keyword", info: "Used in a CASE statement to end the list of conditions" },
-  { label: "IF()", type: "function", info: "Returns one value if a condition is TRUE, or another value if a condition is FALSE" },
-  { label: "IFNULL()", type: "function", info: "Returns a specified value if the expression is NULL" },
-  { label: "NULLIF()", type: "function", info: "Returns NULL if two expressions are equal" },
-  { label: "COALESCE()", type: "function", info: "Returns the first non-NULL value in a list" },
-  
-  // Mathematical Functions
-  { label: "ABS()", type: "function", info: "Returns the absolute value of a number" },
-  { label: "ACOS()", type: "function", info: "Returns the arc cosine of a number" },
-  { label: "ASIN()", type: "function", info: "Returns the arc sine of a number" },
-  { label: "ATAN()", type: "function", info: "Returns the arc tangent of a number" },
-  { label: "ATAN2()", type: "function", info: "Returns the arc tangent of two numbers" },
-  { label: "CEIL()", type: "function", info: "Returns the smallest integer value greater than or equal to a number" },
-  { label: "CEILING()", type: "function", info: "Returns the smallest integer value greater than or equal to a number" },
-  { label: "COS()", type: "function", info: "Returns the cosine of a number" },
-  { label: "COT()", type: "function", info: "Returns the cotangent of a number" },
-  { label: "DEGREES()", type: "function", info: "Converts a value in radians to degrees" },
-  { label: "EXP()", type: "function", info: "Returns e raised to the power of a number" },
-  { label: "FLOOR()", type: "function", info: "Returns the largest integer value less than or equal to a number" },
-  { label: "LN()", type: "function", info: "Returns the natural logarithm of a number" },
-  { label: "LOG()", type: "function", info: "Returns the natural logarithm of a number, or the logarithm of a number to a specified base" },
-  { label: "LOG10()", type: "function", info: "Returns the base-10 logarithm of a number" },
-  { label: "LOG2()", type: "function", info: "Returns the base-2 logarithm of a number" },
-  { label: "MOD()", type: "function", info: "Returns the remainder of a number divided by another number" },
-  { label: "PI()", type: "function", info: "Returns the value of PI" },
-  { label: "POW()", type: "function", info: "Returns the value of a number raised to the power of another number" },
-  { label: "POWER()", type: "function", info: "Returns the value of a number raised to the power of another number" },
-  { label: "RADIANS()", type: "function", info: "Converts a value in degrees to radians" },
-  { label: "RAND()", type: "function", info: "Returns a random floating-point value between 0 and 1" },
-  { label: "ROUND()", type: "function", info: "Rounds a number to a specified number of decimal places" },
-  { label: "SIGN()", type: "function", info: "Returns the sign of a number" },
-  { label: "SIN()", type: "function", info: "Returns the sine of a number" },
-  { label: "SQRT()", type: "function", info: "Returns the square root of a number" },
-  { label: "TAN()", type: "function", info: "Returns the tangent of a number" },
-  { label: "TRUNCATE()", type: "function", info: "Truncates a number to a specified number of decimal places" },
-  
-  // Window Functions
-  { label: "ROW_NUMBER()", type: "function", info: "Returns the row number of the current row" },
-  { label: "RANK()", type: "function", info: "Returns the rank of the current row" },
-  { label: "DENSE_RANK()", type: "function", info: "Returns the dense rank of the current row" },
-  { label: "NTILE()", type: "function", info: "Returns the ntile group number of the current row" },
-  { label: "LAG()", type: "function", info: "Returns the value of the expression evaluated at the row previous to the current row" },
-  { label: "LEAD()", type: "function", info: "Returns the value of the expression evaluated at the row following the current row" },
-  { label: "FIRST_VALUE()", type: "function", info: "Returns the value of the expression evaluated at the first row" },
-  { label: "LAST_VALUE()", type: "function", info: "Returns the value of the expression evaluated at the last row" },
-  { label: "NTH_VALUE()", type: "function", info: "Returns the value of the expression evaluated at the nth row" },
-  { label: "PERCENT_RANK()", type: "function", info: "Returns the percent rank of the current row" },
-  { label: "CUME_DIST()", type: "function", info: "Returns the cumulative distribution of the current row" },
-  
-  // JSON Functions (MySQL 5.7+)
-  { label: "JSON_ARRAY()", type: "function", info: "Creates a JSON array" },
-  { label: "JSON_OBJECT()", type: "function", info: "Creates a JSON object" },
-  { label: "JSON_QUOTE()", type: "function", info: "Quotes a string as a JSON value" },
-  { label: "JSON_CONTAINS()", type: "function", info: "Returns whether a JSON document contains a specific value" },
-  { label: "JSON_CONTAINS_PATH()", type: "function", info: "Returns whether a JSON document contains a specific path" },
-  { label: "JSON_EXTRACT()", type: "function", info: "Extracts a value from a JSON document" },
-  { label: "JSON_KEYS()", type: "function", info: "Returns the keys from a JSON object" },
-  { label: "JSON_SEARCH()", type: "function", info: "Searches a JSON document for a value" },
-  { label: "JSON_ARRAY_APPEND()", type: "function", info: "Appends a value to a JSON array" },
-  { label: "JSON_ARRAY_INSERT()", type: "function", info: "Inserts a value into a JSON array" },
-  { label: "JSON_INSERT()", type: "function", info: "Inserts values into a JSON document" },
-  { label: "JSON_REPLACE()", type: "function", info: "Replaces values in a JSON document" },
-  { label: "JSON_REMOVE()", type: "function", info: "Removes values from a JSON document" },
-  { label: "JSON_SET()", type: "function", info: "Sets values in a JSON document" },
-  { label: "JSON_MERGE()", type: "function", info: "Merges JSON documents" },
-  { label: "JSON_MERGE_PATCH()", type: "function", info: "Merges JSON documents using JSON Merge Patch" },
-  { label: "JSON_MERGE_PRESERVE()", type: "function", info: "Merges JSON documents preserving duplicate keys" },
-  { label: "JSON_TYPE()", type: "function", info: "Returns the type of a JSON value" },
-  { label: "JSON_VALID()", type: "function", info: "Returns whether a value is valid JSON" },
-  { label: "JSON_DEPTH()", type: "function", info: "Returns the maximum depth of a JSON document" },
-  { label: "JSON_LENGTH()", type: "function", info: "Returns the length of a JSON document" },
-  { label: "JSON_PRETTY()", type: "function", info: "Formats a JSON document for readability" },
-  { label: "JSON_STORAGE_SIZE()", type: "function", info: "Returns the storage size of a JSON document" },
-  { label: "JSON_TABLE()", type: "function", info: "Returns a relational table from JSON data" },
-  { label: "JSON_UNQUOTE()", type: "function", info: "Unquotes a JSON value" },
-  
-  // MySQL 8.0+ Functions
-  { label: "GROUPING()", type: "function", info: "Indicates whether a specified column expression in a GROUP BY clause is aggregated" },
-  { label: "LATERAL", type: "keyword", info: "Used with derived tables to refer to preceding tables in the FROM clause" },
-  { label: "OVER()", type: "function", info: "Defines a window for a window function" },
-  { label: "PARTITION BY", type: "keyword", info: "Divides the result set into partitions" },
-  { label: "WITH ROLLUP", type: "keyword", info: "Adds extra rows to the result set of GROUP BY to represent subtotals" },
-  { label: "RECURSIVE", type: "keyword", info: "Used in a CTE to define a recursive query" },
-  
-  // Deprecated functions (included for compatibility)
-  { label: "DATABASE()", type: "function", info: "Returns the name of the current database" },
-  { label: "SCHEMA()", type: "function", info: "Returns the name of the current database (alias for DATABASE)" },
-  { label: "USER()", type: "function", info: "Returns the current MySQL user name and host name" },
-  { label: "VERSION()", type: "function", info: "Returns the current version of the MySQL server" },
-  { label: "CURRENT_USER()", type: "function", info: "Returns the user name and host name for the MySQL account" },
-  { label: "LAST_INSERT_ID()", type: "function", info: "Returns the AUTO_INCREMENT value generated by the last INSERT statement" },
-  { label: "PASSWORD()", type: "function", info: "Calculates and returns a password string" },
-  { label: "BENCHMARK()", type: "function", info: "Executes an expression repeatedly" },
-  { label: "CONVERT()", type: "function", info: "Converts a value to a different data type" },
-  { label: "CAST()", type: "function", info: "Converts a value to a different data type" },
-];
-
-// Create a completion source for variables
-const variableCompletions = computed(() => {
-    if (!props.variables) return [];
-    
-    return props.variables.map(variable => ({
-        label: `{{ ${variable.Value} }}`,
-        type: "variable",
-        detail: `Field from .xlsx`,
-        info: `Field from .xlsx: ${variable.Field}`,
-        apply: `{{ ${variable.Value} }}`,
-        boost: 99, // Give variables higher priority
-    }));
-});
-
 // Autocomplete function for variables
 const completeVariables = (context: CompletionContext): CompletionResult | null => {
     // Get the word at cursor
@@ -844,7 +640,7 @@ const completeVariables = (context: CompletionContext): CompletionResult | null 
     };
 };
 
-// Autocomplete function for SQL
+// Autocomplete function for SQL - optimized for performance
 const completeSql = (context: CompletionContext): CompletionResult | null => {
     // Skip if we're inside a variable template
     const variablePattern = /\{\{\s*\w*\s*\}?\}?/;
@@ -864,8 +660,14 @@ const completeSql = (context: CompletionContext): CompletionResult | null => {
         return null;
     }
     
+    const wordLower = word.text.toLowerCase();
+    
     // First check for table names after FROM or JOIN
-    const textBefore = context.state.doc.sliceString(0, context.pos).toLowerCase();
+    const textBefore = context.state.doc.sliceString(
+        Math.max(0, context.pos - 100), // Only check the last 100 characters for better performance
+        context.pos
+    ).toLowerCase();
+    
     const lastFromOrJoin = Math.max(
         textBefore.lastIndexOf("from "), 
         textBefore.lastIndexOf("join ")
@@ -874,35 +676,33 @@ const completeSql = (context: CompletionContext): CompletionResult | null => {
     
     // If we're after FROM or JOIN, prioritize table completions
     if (lastFromOrJoin > -1 && lastFromOrJoin > lastComma) {
-        // Only filter for tables that match the current word
+        // Only filter for tables that match the current word - using faster array methods
         const filteredTables = tableCompletions.value.filter(table => 
-            table.label.toLowerCase().startsWith(word.text.toLowerCase())
+            table.label.toLowerCase().indexOf(wordLower) === 0
         );
         
         if (filteredTables.length > 0 || context.explicit) {
             return {
                 from: word.from,
-                options: filteredTables,
+                options: filteredTables.slice(0, 100), // Limit to 100 results for performance
                 validFor: /\w+/,
             };
         }
     }
     
     // Check for column completions
-    // This should work after SELECT, WHERE, ORDER BY, etc.
-    // Look for patterns like "table." to provide columns for that specific table
     const periodMatch = context.matchBefore(/(\w+)\.\w*/);
     if (periodMatch) {
         const tableName = periodMatch.text.split('.')[0];
         const columnWord = context.matchBefore(/\w*$/);
         
         if (columnWord) {
-            // Get columns for the specific table
-            const tableSpecificColumns = columnCompletions.value.filter(column => 
-                column.table === tableName && 
-                column.type === "column" && 
-                column.label.toLowerCase().startsWith(columnWord.text.toLowerCase())
-            );
+            const columnWordLower = columnWord.text.toLowerCase();
+            // Get columns for the specific table - using filter with early return for performance
+            const tableSpecificColumns = columnCompletions.value.filter(column => {
+                if (column.table !== tableName || column.type !== "column") return false;
+                return column.label.toLowerCase().indexOf(columnWordLower) === 0;
+            }).slice(0, 100); // Limit results
             
             if (tableSpecificColumns.length > 0 || context.explicit) {
                 return {
@@ -914,24 +714,59 @@ const completeSql = (context: CompletionContext): CompletionResult | null => {
         }
     }
     
-    // Default to showing all columns and SQL keywords
-    // Combine SQL keywords with column completions
-    const allOptions = [...sqlKeywords, ...columnCompletions.value];
-    
-    // Filter options based on input
-    const filteredOptions = allOptions.filter(option => 
-        option.label.toLowerCase().startsWith(word.text.toLowerCase())
-    );
-    
-    if (filteredOptions.length === 0 && !context.explicit) {
-        return null;
+    // For performance, first check common keywords that might match
+    const commonKeywords = ["SELECT", "FROM", "WHERE", "JOIN", "GROUP", "ORDER", "HAVING", "LIMIT"];
+    if (commonKeywords.some(kw => kw.toLowerCase().indexOf(wordLower) === 0)) {
+        const filteredCommonKeywords = sqlKeywords.value.filter((kw: { label: string }) => 
+            kw.label.toLowerCase().indexOf(wordLower) === 0 && 
+            commonKeywords.includes(kw.label)
+        );
+        
+        if (filteredCommonKeywords.length > 0) {
+            return {
+                from: word.from,
+                options: filteredCommonKeywords,
+                validFor: /\w+/,
+            };
+        }
     }
     
-    return {
-        from: word.from,
-        options: filteredOptions,
-        validFor: /\w+/,
-    };
+    // Only if the word has at least 2 characters or explicit request, search all options
+    if (wordLower.length >= 2 || context.explicit) {
+        // Use a faster filtering approach with maximum limits
+        const filteredOptions = [];
+        const maxResults = 100;
+        
+        // First prioritize keywords for better UX
+        for (const option of sqlKeywords.value) {
+            if (option.label.toLowerCase().indexOf(wordLower) === 0) {
+                filteredOptions.push(option);
+                if (filteredOptions.length >= maxResults / 2) break;
+            }
+        }
+        
+        // Then add columns if we have space
+        if (filteredOptions.length < maxResults) {
+            for (const option of columnCompletions.value) {
+                if (option.label.toLowerCase().indexOf(wordLower) === 0) {
+                    filteredOptions.push(option);
+                    if (filteredOptions.length >= maxResults) break;
+                }
+            }
+        }
+        
+        if (filteredOptions.length === 0 && !context.explicit) {
+            return null;
+        }
+        
+        return {
+            from: word.from,
+            options: filteredOptions,
+            validFor: /\w+/,
+        };
+    }
+    
+    return null;
 };
 
 // Add custom styling for autocomplete items
@@ -1087,6 +922,7 @@ const createVariableHighlighter = () => {
         }
         
         update(update: ViewUpdate) {
+            // Only rebuild decorations if document or viewport changed
             if (update.docChanged || update.viewportChanged) {
                 this.decorations = this.buildDecorations(update.view);
             }
@@ -1095,6 +931,7 @@ const createVariableHighlighter = () => {
         buildDecorations(view: EditorView) {
             const decorations = [];
             
+            // Only process visible ranges to improve performance
             for (const { from, to } of view.visibleRanges) {
                 const text = view.state.doc.sliceString(from, to);
                 const matches = [...text.matchAll(variableRegex)];
@@ -1103,7 +940,6 @@ const createVariableHighlighter = () => {
                     const start = from + match.index!;
                     const end = start + match[0].length;
                     
-                    // Improved variable highlighting with a more visible style
                     decorations.push(Decoration.mark({
                         class: "cm-variable-template"
                     }).range(start, end));
@@ -1117,14 +953,16 @@ const createVariableHighlighter = () => {
     });
 };
 
-// Combine all extensions
-const extensions = computed(() => {
+// Cache extensions for better performance
+const createExtensions = (darkMode: boolean) => {
     const exts = [
         myTheme,
         createVariableHighlighter(),
         autocompletion({
             override: [completeVariables, completeSql],
             icons: true,
+            maxRenderedOptions: 100, // Limit rendered options for performance
+            defaultKeymap: true,     // Use default keymap for better performance
             optionClass: option => option.type ? `cm-completion-${option.type}` : "",
             addToOptions: [
                 {
@@ -1136,7 +974,6 @@ const extensions = computed(() => {
                         dom.style.opacity = "0.7";
                         dom.style.fontSize = "0.85em";
                         
-                        // Show different info based on completion type
                         if (completion.type === "variable" && completion.detail) {
                             dom.textContent = completion.detail.length > 20 
                                 ? completion.detail.substring(0, 20) + "..." 
@@ -1156,31 +993,61 @@ const extensions = computed(() => {
     ];
     
     // Add oneDarkTheme only if in dark mode
-    if (isDarkMode.value) {
+    if (darkMode) {
         exts.unshift(oneDarkTheme);
     }
     
     return exts;
+};
+
+// Separate cache for dark and light mode
+let lightModeExtensionsCache: any[] | null = null;
+let darkModeExtensionsCache: any[] | null = null;
+let lightModeOutputExtensionsCache: any[] | null = null;
+let darkModeOutputExtensionsCache: any[] | null = null;
+
+// Combine all extensions - with memoization
+const extensions = computed(() => {
+    if (isDarkMode.value) {
+        if (!darkModeExtensionsCache) {
+            darkModeExtensionsCache = createExtensions(true);
+        }
+        return darkModeExtensionsCache;
+    } else {
+        if (!lightModeExtensionsCache) {
+            lightModeExtensionsCache = createExtensions(false);
+        }
+        return lightModeExtensionsCache;
+    }
 });
 
-// Output editor extensions (simpler, no autocomplete)
+// Output editor extensions (simpler, no autocomplete) - with memoization
 const outputExtensions = computed(() => {
-    const exts = [myTheme];
-    
-    // Add oneDarkTheme only if in dark mode
     if (isDarkMode.value) {
-        exts.unshift(oneDarkTheme);
+        if (!darkModeOutputExtensionsCache) {
+            darkModeOutputExtensionsCache = isDarkMode.value ? [oneDarkTheme, myTheme] : [myTheme];
+        }
+        return darkModeOutputExtensionsCache;
+    } else {
+        if (!lightModeOutputExtensionsCache) {
+            lightModeOutputExtensionsCache = [myTheme];
+        }
+        return lightModeOutputExtensionsCache;
     }
-    
-    return exts;
 });
+
+// Optimize the SQL binding with debounce to prevent excessive computations
+const debouncedMakeBindedSQL = useDebounceFn(async (sql: string, data: any[], variables: any[], minify?: boolean) => {
+    // Ensure minify is always a boolean when passed to the Go function
+    return await MakeBindedSQL(sql, data, variables, minify || false) ?? "";
+}, 300); // 300ms debounce
 
 const linesBinded = computedAsync(async () => {
     if(!props.showBindedSql) {
         return "";
     }
 
-    return await MakeBindedSQL(value.value, props.data!, props.variables!, props.minify) ?? "";
+    return await debouncedMakeBindedSQL(value.value, props.data!, props.variables!, props.minify);
 }, "");
 
 const getBindedSQL = async (): Promise<string> => {
@@ -1217,8 +1084,8 @@ defineExpose({
     isDarkMode
 });
 
-// Check if dark mode is enabled
-const updateDarkMode = () => {
+// Debounced dark mode checking to prevent excessive DOM operations
+const updateDarkMode = useDebounceFn(() => {
     // Check for .dark class on html or body
     const hasDarkClass = 
         document.documentElement.classList.contains('dark') || 
@@ -1239,133 +1106,26 @@ const updateDarkMode = () => {
         document.body.classList.contains('tw-dark');
     
     // Determine final dark mode state based on checks
-    // Priority: .dark class > data-theme > custom class > media query
     const isDark = hasDarkClass || hasDataThemeDark || hasCustomDarkClass || prefersDark;
     
-    // Log the determination factors (for debugging)
-    console.log("Dark mode detection:", { 
-        hasDarkClass, 
-        prefersDark, 
-        hasDataThemeDark, 
-        hasCustomDarkClass,
-        result: isDark
-    });
+    // Avoid unnecessary updates if the dark mode state hasn't changed
+    if (isDarkMode.value !== isDark) {
+        isDarkMode.value = isDark;
+    }
+}, 100); // 100ms debounce is sufficient for UI theme changes
+
+// Create a completion source for variables
+const variableCompletions = computed(() => {
+    if (!props.variables) return [];
     
-    isDarkMode.value = isDark;
-};
+    return props.variables.map(variable => ({
+        label: `{{ ${variable.Value} }}`,
+        value: variable.Value
+    }));
+});
+
 </script>
 
 <style scoped>
-.editor-dark-mode :deep(.cm-editor) {
-    background-color: #1f2937; /* dark:bg-gray-800 */
-    color: #f9fafb; /* dark:text-gray-100 */
-}
-
-/* Custom dark styles that can be applied directly */
-.editor-dark-mode :deep(.cm-gutters) {
-    background-color: #111827; /* dark:bg-gray-900 */
-    color: #6b7280; /* dark:text-gray-500 */
-    border-right-color: #374151; /* dark:border-gray-700 */
-}
-
-.editor-dark-mode :deep(.cm-activeLineGutter) {
-    background-color: #374151; /* dark:bg-gray-700 */
-    color: #9ca3af; /* dark:text-gray-400 */
-}
-
-.editor-dark-mode :deep(.cm-activeLine) {
-    background-color: rgba(55, 65, 81, 0.3); /* dark:bg-gray-700/30 */
-}
-
-.editor-dark-mode :deep(.cm-selectionMatch) {
-    background-color: rgba(37, 99, 235, 0.2); /* dark:bg-blue-600/20 */
-}
-
-.editor-dark-mode :deep(.cm-tooltip) {
-    background: #1f2937; /* dark:bg-gray-800 */
-    border: 1px solid #374151; /* dark:border-gray-700 */
-    color: #f9fafb; /* dark:text-gray-100 */
-}
-
-/* Enhanced styling for variables */
-:deep(.cm-variable-template) {
-    color: #0284c7; /* text-sky-600 */
-    background: rgba(2, 132, 199, 0.15); /* bg-sky-50/15 - more visible */
-    border-radius: 4px;
-    padding: 1px 2px;
-    margin: 0 1px;
-    font-weight: 500;
-    box-shadow: 0 0 0 1px rgba(2, 132, 199, 0.2);
-}
-
-.editor-dark-mode :deep(.cm-variable-template) {
-    color: #38bdf8; /* dark:text-sky-400 */
-    background: rgba(56, 189, 248, 0.15); /* dark:bg-sky-400/15 */
-    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.3);
-}
-
-/* Editor style */
-:deep(.cm-editor) {
-    border-radius: 0.375rem;
-    overflow: hidden;
-    transition: all 0.2s;
-    height: var(--editor-height, auto);
-    min-height: 100px;
-    resize: vertical; /* Allow vertical resizing */
-}
-
-:deep(.cm-editor:focus-within) {
-    box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);
-}
-
-.editor-dark-mode :deep(.cm-editor:focus-within) {
-    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
-}
-
-/* Style for autocomplete tooltips */
-:deep(.cm-tooltip.cm-tooltip-autocomplete) {
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    border-radius: 6px;
-    padding: 4px 0;
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-:deep(.cm-tooltip-autocomplete ul li) {
-    padding: 4px 8px;
-    border-radius: 4px;
-    margin: 0 4px;
-}
-
-:deep(.cm-completionMatchedText) {
-    text-decoration: none;
-    font-weight: 500;
-    color: #0284c7; /* text-sky-600 */
-}
-
-.editor-dark-mode :deep(.cm-completionMatchedText) {
-    color: #38bdf8; /* dark:text-sky-400 */
-}
-
-/* Visual indication of resize capability */
-:deep(.cm-editor::after) {
-    content: "";
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 5px;
-    background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.05));
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.2s;
-}
-
-:deep(.cm-editor:hover::after) {
-    opacity: 1;
-}
-
-.editor-dark-mode :deep(.cm-editor::after) {
-    background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.05));
-}
+/* Add your styles here */
 </style>

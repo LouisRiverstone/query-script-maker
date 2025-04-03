@@ -550,14 +550,14 @@ const filteredNodesCache = new Map<string, any[]>();
 
 const filteredNodes = computed(() => {
   if (!nodes.value || !searchQuery.value) {
-    return nodes.value;
+    return nodes.value || [];
   }
   
   const query = searchQuery.value.toLowerCase();
   const cacheKey = query;
   
   if (filteredNodesCache.has(cacheKey)) {
-    return filteredNodesCache.get(cacheKey);
+    return filteredNodesCache.get(cacheKey) || [];
   }
   
   const filtered = nodes.value.filter(node => {
