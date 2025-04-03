@@ -207,7 +207,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, onUnmounted } from 'vue';
+import { ref, onMounted, computed, watch, onUnmounted, shallowRef, nextTick, markRaw } from 'vue';
 import Button from './Button.vue';
 import { 
   VueFlow, 
@@ -275,9 +275,9 @@ const isDarkMode = computed(() => {
   return props.isDarkMode !== undefined ? props.isDarkMode : localIsDarkMode.value;
 });
 
-// Elements for Vue Flow
-const nodes = ref<any[]>([]);
-const edges = ref<any[]>([]);
+// Elements for Vue Flow - using shallowRef for better performance
+const nodes = shallowRef<any[]>([]);
+const edges = shallowRef<any[]>([]);
 
 // Selected table/column tracking
 const selectedTable = ref<string | null>(null);
@@ -336,15 +336,36 @@ const updateDarkMode = () => {
                   window.matchMedia('(prefers-color-scheme: dark)').matches;
 };
 
-// Node color function for minimap
+// Node color function for minimap - memoized for better performance
+const nodeColorCache = new Map<string, string>();
 const getNodeColor = (node: Node) => {
-  if (node.id === selectedTable.value) {
-    return '#4f46e5'; // Highlight selected table
+  const cacheKey = `${node.id}-${selectedTable.value === node.id}`;
+  if (nodeColorCache.has(cacheKey)) {
+    return nodeColorCache.get(cacheKey)!;
   }
-  return '#6b7280'; // Default gray color
+  
+  const color = node.id === selectedTable.value ? '#4f46e5' : '#6b7280';
+  nodeColorCache.set(cacheKey, color);
+  return color;
 };
 
-// Parse database structure and create diagram
+// Debounce function for expensive operations
+function debounce(fn: Function, delay: number) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return function(...args: any[]) {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      fn(...args);
+      timer = null;
+    }, delay);
+  };
+}
+
+// Parse database structure and create diagram - debounced and optimized
+const debouncedParseDbStructure = debounce((structureStr: string) => {
+  parseDbStructure(structureStr);
+}, 200);
+
 const parseDbStructure = (structureStr: string) => {
   try {
     if (!structureStr) {
@@ -367,65 +388,50 @@ const parseDbStructure = (structureStr: string) => {
     // Track foreign keys for edge creation
     const foreignKeyMap = new Map<string, ForeignKey[]>();
     
-    // Process tables as nodes
-    structure.tables.forEach((table) => {
-      // Keep track of foreign key columns
-      const foreignKeyColumns = new Set(table.foreignKeys.map(fk => fk.columnName));
+    // Process tables as nodes - in batches for better performance
+    const batchSize = 10;
+    const processBatch = (startIdx: number) => {
+      const endIdx = Math.min(startIdx + batchSize, structure.tables.length);
       
-      // Prepare columns with visual indicators
-      const columns = table.columns.map(col => ({
-        ...col,
-        isForeign: foreignKeyColumns.has(col.name)
-      }));
-      
-      // Create node for the table
-      diagramNodes.push({
-        id: table.name,
-        type: 'table',
-        data: { 
-          label: table.name,
-          columns
-        },
-        position: { x: 0, y: 0 } // Will be positioned by layout algorithm
-      });
-      
-      // Store foreign keys for edge creation
-      if (table.foreignKeys.length > 0) {
-        foreignKeyMap.set(table.name, table.foreignKeys);
-      }
-    });
-    
-    // Process foreign keys as edges
-    foreignKeyMap.forEach((foreignKeys, tableName) => {
-      foreignKeys.forEach(fk => {
-        const edgeId = `${tableName}-${fk.columnName}-to-${fk.referencedTable}-${fk.referencedColumn}`;
+      for (let i = startIdx; i < endIdx; i++) {
+        const table = structure.tables[i];
+        // Keep track of foreign key columns
+        const foreignKeyColumns = new Set(table.foreignKeys.map(fk => fk.columnName));
         
-        diagramEdges.push({
-          id: edgeId,
-          source: tableName,
-          target: fk.referencedTable,
-          label: `${fk.columnName} → ${fk.referencedColumn}`,
-          animated: false,
-          style: { stroke: '#3b82f6' },
-          labelBgStyle: { fill: '#3b82f6', color: '#ffffff', fillOpacity: 0.7 },
-          labelStyle: { fill: '#ffffff', fontWeight: 500, fontSize: 10 },
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color: '#3b82f6'
-          }
+        // Prepare columns with visual indicators
+        const columns = table.columns.map(col => ({
+          ...col,
+          isForeign: foreignKeyColumns.has(col.name)
+        }));
+        
+        // Create node for the table
+        diagramNodes.push({
+          id: table.name,
+          type: 'table',
+          data: { 
+            label: table.name,
+            columns
+          },
+          position: { x: 0, y: 0 } // Will be positioned by layout algorithm
         });
-      });
-    });
+        
+        // Store foreign keys for edge creation
+        if (table.foreignKeys.length > 0) {
+          foreignKeyMap.set(table.name, table.foreignKeys);
+        }
+      }
+      
+      // Process next batch if needed
+      if (endIdx < structure.tables.length) {
+        setTimeout(() => processBatch(endIdx), 0);
+      } else {
+        // All tables processed, now create edges
+        createEdgesAndApplyLayout(diagramNodes, diagramEdges, foreignKeyMap);
+      }
+    };
     
-    // Apply layout
-    const positionedNodes = getLayoutedElements(diagramNodes, diagramEdges);
-    
-    nodes.value = positionedNodes;
-    edges.value = diagramEdges;
-    
-    // Reset selection
-    selectedTable.value = null;
-    selectedColumn.value = null;
+    // Start processing tables in batches
+    processBatch(0);
   } catch (error) {
     console.error('Error parsing database structure:', error);
     nodes.value = [];
@@ -433,7 +439,43 @@ const parseDbStructure = (structureStr: string) => {
   }
 };
 
-// Calculate layout using dagre
+// Separate function to create edges and apply layout
+const createEdgesAndApplyLayout = (diagramNodes: Node[], diagramEdges: Edge[], foreignKeyMap: Map<string, ForeignKey[]>) => {
+  // Process foreign keys as edges
+  foreignKeyMap.forEach((foreignKeys, tableName) => {
+    foreignKeys.forEach(fk => {
+      const edgeId = `${tableName}-${fk.columnName}-to-${fk.referencedTable}-${fk.referencedColumn}`;
+      
+      diagramEdges.push({
+        id: edgeId,
+        source: tableName,
+        target: fk.referencedTable,
+        label: `${fk.columnName} → ${fk.referencedColumn}`,
+        animated: false,
+        style: { stroke: '#3b82f6' },
+        labelBgStyle: { fill: '#3b82f6', color: '#ffffff', fillOpacity: 0.7 },
+        labelStyle: { fill: '#ffffff', fontWeight: 500, fontSize: 10 },
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          color: '#3b82f6'
+        }
+      });
+    });
+  });
+  
+  // Apply layout
+  const positionedNodes = getLayoutedElements(diagramNodes, diagramEdges);
+  
+  // Use markRaw to avoid unnecessary proxying of node/edge objects
+  nodes.value = markRaw(positionedNodes);
+  edges.value = markRaw(diagramEdges);
+  
+  // Reset selection
+  selectedTable.value = null;
+  selectedColumn.value = null;
+};
+
+// Calculate layout using dagre - optimized
 const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
@@ -460,10 +502,11 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'TB') => 
   // Calculate layout
   dagre.layout(dagreGraph);
   
-  // Apply calculated positions to nodes
+  // Apply calculated positions to nodes - with minimal object creation
   return nodes.map((node) => {
     const nodeWithPosition = dagreGraph.node(node.id);
     
+    // Create a new node object with position applied
     return {
       ...node,
       position: {
@@ -488,9 +531,9 @@ onUnmounted(() => {
   window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', updateDarkMode);
 });
 
-// Watch for database structure changes
+// Watch for database structure changes - optimized with debounce
 watch(() => props.databaseStructure, (newValue) => {
-  parseDbStructure(newValue);
+  debouncedParseDbStructure(newValue);
 }, { immediate: true });
 
 // Watch for dark mode changes from parent
@@ -501,16 +544,23 @@ watch(() => props.isDarkMode, (newValue) => {
   }
 });
 
-// Filter nodes based on search query
+// Filter nodes based on search query - memoized
 const searchQuery = ref('');
+const filteredNodesCache = new Map<string, any[]>();
+
 const filteredNodes = computed(() => {
   if (!nodes.value || !searchQuery.value) {
     return nodes.value;
   }
   
   const query = searchQuery.value.toLowerCase();
+  const cacheKey = query;
   
-  return nodes.value.filter(node => {
+  if (filteredNodesCache.has(cacheKey)) {
+    return filteredNodesCache.get(cacheKey);
+  }
+  
+  const filtered = nodes.value.filter(node => {
     // Check if table name matches
     if (node.data.label.toLowerCase().includes(query)) {
       return true;
@@ -521,6 +571,15 @@ const filteredNodes = computed(() => {
       column.name.toLowerCase().includes(query)
     );
   });
+  
+  // Cache the result
+  filteredNodesCache.set(cacheKey, filtered);
+  return filtered;
+});
+
+// Clear cache when nodes change
+watch(() => nodes.value, () => {
+  filteredNodesCache.clear();
 });
 
 // Expand/collapse table functionality
@@ -533,21 +592,48 @@ const toggleExpandTable = (tableId: string) => {
   }
 };
 
-// Helper to check if table name matches search
+// Helper to check if table name matches search - memoized
+const tableMatchCache = new Map<string, boolean>();
 const tableMatchesSearch = (node: any) => {
   if (!searchQuery.value) return false;
-  return node.data.label.toLowerCase().includes(searchQuery.value.toLowerCase());
+  
+  const cacheKey = `${node.data.label}-${searchQuery.value}`;
+  if (tableMatchCache.has(cacheKey)) {
+    return tableMatchCache.get(cacheKey);
+  }
+  
+  const matches = node.data.label.toLowerCase().includes(searchQuery.value.toLowerCase());
+  tableMatchCache.set(cacheKey, matches);
+  return matches;
 };
 
-// Helper to check if column matches search
+// Helper to check if column matches search - memoized
+const columnMatchCache = new Map<string, boolean>();
 const columnMatchesSearch = (column: { name: string }) => {
   if (!searchQuery.value) return false;
-  return column.name.toLowerCase().includes(searchQuery.value.toLowerCase());
+  
+  const cacheKey = `${column.name}-${searchQuery.value}`;
+  if (columnMatchCache.has(cacheKey)) {
+    return columnMatchCache.get(cacheKey);
+  }
+  
+  const matches = column.name.toLowerCase().includes(searchQuery.value.toLowerCase());
+  columnMatchCache.set(cacheKey, matches);
+  return matches;
 };
 
-// Watch search query to auto-expand tables with matches
-watch(() => searchQuery.value, (newQuery) => {
-  if (!newQuery) {
+// Clear caches when search query changes
+watch(() => searchQuery.value, () => {
+  tableMatchCache.clear();
+  columnMatchCache.clear();
+  
+  // Debounced expansion logic
+  debouncedExpandTables();
+});
+
+// Debounced function for table expansion
+const debouncedExpandTables = debounce(() => {
+  if (!searchQuery.value) {
     // If query is cleared, collapse all tables except the selected one
     expandedTables.value = selectedTable.value ? [selectedTable.value] : [];
     return;
@@ -555,7 +641,7 @@ watch(() => searchQuery.value, (newQuery) => {
   
   // Find tables that match the search query (either table name or column names)
   const matchingTableIds = nodes.value.filter(node => {
-    const query = newQuery.toLowerCase();
+    const query = searchQuery.value.toLowerCase();
     
     // Check if table name matches
     if (node.data.label.toLowerCase().includes(query)) {
@@ -570,7 +656,7 @@ watch(() => searchQuery.value, (newQuery) => {
   
   // Auto expand tables with matches
   expandedTables.value = [...new Set([...expandedTables.value, ...matchingTableIds])];
-});
+}, 200);
 </script>
 
 <style scoped>

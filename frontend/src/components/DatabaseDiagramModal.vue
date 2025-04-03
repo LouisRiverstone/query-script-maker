@@ -77,7 +77,26 @@
               <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">This may take a moment</p>
             </div>
           </div>
-          <DatabaseDiagram v-else :databaseStructure="databaseStructure" :isDarkMode="isDarkMode" class="h-full" />
+          <Suspense v-else>
+            <DatabaseDiagram 
+              :databaseStructure="databaseStructure" 
+              :isDarkMode="isDarkMode" 
+              class="h-full" 
+            />
+            <template #fallback>
+              <div class="flex items-center justify-center h-full">
+                <div class="text-center p-8">
+                  <div class="inline-block">
+                    <svg class="animate-spin h-10 w-10 text-indigo-600 dark:text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  </div>
+                  <p class="mt-4 text-gray-600 dark:text-gray-300 font-medium">Loading diagram...</p>
+                </div>
+              </div>
+            </template>
+          </Suspense>
         </div>
         
         <!-- Footer (optional) -->
@@ -91,10 +110,19 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps, defineEmits, ref, computed, onMounted, watch } from 'vue';
-import DatabaseDiagram from './DatabaseDiagram.vue';
+import { defineProps, defineEmits, ref, computed, onMounted, watch, onBeforeUnmount, defineAsyncComponent, shallowRef, markRaw } from 'vue';
 import Button from './Button.vue';
 import { GetLatestDatabaseStructure, GetDatabaseConnection, GetDatabaseStructure } from '../../wailsjs/go/main/App';
+
+// Lazy load the DatabaseDiagram component
+const DatabaseDiagram = defineAsyncComponent(() => 
+  import('./DatabaseDiagram.vue').then(module => {
+    // Add artificial delay to ensure smoother loading UX
+    return new Promise(resolve => {
+      setTimeout(() => resolve(module.default), 100);
+    });
+  })
+);
 
 const props = defineProps<{
   isOpen: boolean;
@@ -105,25 +133,67 @@ const emit = defineEmits(['close', 'refresh']);
 
 const isRefreshing = ref(false);
 const isDarkMode = ref(false);
+let fetchAbortController: AbortController | null = null;
+
+// Use shallowRef for better performance with large JSON objects
+const dbStructureCache = shallowRef<any>(null);
 const dbStructure = computed(() => {
-  try {
-    return JSON.parse(props.databaseStructure || '{}');
-  } catch (e) {
-    return {};
+  if (!props.databaseStructure) return {};
+  
+  // Parse JSON only if it has changed
+  if (!dbStructureCache.value || props.databaseStructure !== dbStructureRaw.value) {
+    try {
+      dbStructureCache.value = markRaw(JSON.parse(props.databaseStructure));
+      dbStructureRaw.value = props.databaseStructure;
+    } catch (e) {
+      console.error('Error parsing database structure:', e);
+      dbStructureCache.value = {};
+    }
   }
+  
+  return dbStructureCache.value;
 });
+
+// Store raw string to detect changes
+const dbStructureRaw = ref('');
 
 const tableCount = computed(() => {
   return dbStructure.value?.tables?.length || 0;
 });
 
 const close = () => {
+  // Cancel any pending operations
+  if (fetchAbortController) {
+    fetchAbortController.abort();
+    fetchAbortController = null;
+  }
+  
   emit('close');
+};
+
+// Debounce function to prevent excessive API calls
+const debounce = (fn: Function, delay: number) => {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return function(...args: any[]) {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      fn(...args);
+      timer = null;
+    }, delay);
+  };
 };
 
 const refreshDiagram = async () => {
   try {
     isRefreshing.value = true;
+    
+    // Cancel any previous requests
+    if (fetchAbortController) {
+      fetchAbortController.abort();
+    }
+    
+    // Create a new AbortController
+    fetchAbortController = new AbortController();
     
     // Try to fetch structure directly from database first
     try {
@@ -135,19 +205,28 @@ const refreshDiagram = async () => {
         return;
       }
     } catch (error) {
-      console.log('Could not refresh from database directly, using cached structure');
+      if (error.name !== 'AbortError') {
+        console.log('Could not refresh from database directly, using cached structure');
+      }
     }
     
     // Fall back to cached structure in SQLite
     const newStructure = await GetLatestDatabaseStructure();
     emit('refresh', newStructure);
   } catch (error) {
-    console.error('Error refreshing database structure:', error);
+    if (error.name !== 'AbortError') {
+      console.error('Error refreshing database structure:', error);
+    }
   } finally {
     isRefreshing.value = false;
+    fetchAbortController = null;
   }
 };
 
+// Create debounced version of refresh function
+const debouncedRefresh = debounce(refreshDiagram, 300);
+
+// Toggle between light and dark mode
 const toggleTheme = () => {
   if (isDarkMode.value) {
     document.documentElement.classList.remove('dark');
@@ -167,6 +246,7 @@ const updateDarkMode = () => {
                     localStorage.theme === 'dark';
 };
 
+// Initial setup when component mounts
 onMounted(() => {
   updateDarkMode();
   
@@ -178,16 +258,65 @@ onMounted(() => {
     document.documentElement.classList.remove('dark');
     isDarkMode.value = false;
   }
+  
+  // Set up media query listener for dark mode changes
+  const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  darkModeMediaQuery.addEventListener('change', updateDarkMode);
+  
+  // Store reference for cleanup
+  mediaQueryListener = darkModeMediaQuery;
 });
 
-// Pass isDarkMode to the DatabaseDiagram component when it changes
-watch(() => isDarkMode.value, (newValue) => {
-  // Any additional logic needed when dark mode changes
+// Store media query reference for cleanup
+let mediaQueryListener: MediaQueryList | null = null;
+
+// Cleanup when component unmounts
+onBeforeUnmount(() => {
+  if (mediaQueryListener) {
+    mediaQueryListener.removeEventListener('change', updateDarkMode);
+  }
+  
+  if (fetchAbortController) {
+    fetchAbortController.abort();
+    fetchAbortController = null;
+  }
 });
+
+// Observe modal visibility changes
+watch(() => props.isOpen, (isOpen) => {
+  if (isOpen) {
+    // Parse the structure when the modal opens
+    if (props.databaseStructure && props.databaseStructure !== dbStructureRaw.value) {
+      try {
+        dbStructureCache.value = markRaw(JSON.parse(props.databaseStructure));
+        dbStructureRaw.value = props.databaseStructure;
+      } catch (e) {
+        console.error('Error parsing database structure:', e);
+        dbStructureCache.value = {};
+      }
+    }
+  } else {
+    // Cancel any pending operations when modal closes
+    if (fetchAbortController) {
+      fetchAbortController.abort();
+      fetchAbortController = null;
+    }
+  }
+});
+
+// Watch for database structure changes from props
+watch(() => props.databaseStructure, (newValue) => {
+  if (newValue && newValue !== dbStructureRaw.value) {
+    // Update the raw value reference
+    dbStructureRaw.value = newValue;
+    
+    // Clear the cache to force a re-parse on next access
+    dbStructureCache.value = null;
+  }
+}, { immediate: true });
 </script>
 
 <style>
-
 /* Smooth transitions */
 .transition-all {
   transition-property: all;

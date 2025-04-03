@@ -16,7 +16,17 @@
       
       <!-- Modal Body -->
       <div class="flex-1 overflow-auto p-4">
-        <SqlVisualizer :initialQuery="initialQuery" :databaseStructure="databaseStructure" />
+        <Suspense>
+          <SqlVisualizer :initialQuery="initialQuery" :databaseStructure="databaseStructure" />
+          <template #fallback>
+            <div class="flex items-center justify-center h-64">
+              <div class="text-center">
+                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-500 mx-auto"></div>
+                <p class="mt-4 text-gray-600 dark:text-gray-400">Loading visualizer...</p>
+              </div>
+            </div>
+          </template>
+        </Suspense>
       </div>
       
       <!-- Modal Footer -->
@@ -28,10 +38,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
-import SqlVisualizer from './SqlVisualizer.vue';
+import { ref, watch, onMounted, onBeforeUnmount, defineAsyncComponent, shallowRef } from 'vue';
 import Button from './Button.vue';
 import { GetLatestDatabaseStructure } from '../../wailsjs/go/main/App';
+
+// Lazy load SqlVisualizer component for better initial loading performance
+const SqlVisualizer = defineAsyncComponent(() => 
+  import('./SqlVisualizer.vue')
+);
 
 const props = defineProps<{
   isOpen: boolean;
@@ -40,35 +54,78 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits(['close']);
-const databaseStructure = ref<string>('');
+const databaseStructure = shallowRef<string>('');
+let isLoading = ref(false);
+let fetchAbortController: AbortController | null = null;
 
 const close = () => {
+  // Cancel any pending fetch operations
+  if (fetchAbortController) {
+    fetchAbortController.abort();
+    fetchAbortController = null;
+  }
   emit('close');
+};
+
+// Debounce function to prevent excessive API calls
+const debounce = (fn: Function, delay: number) => {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  return function(...args: any[]) {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      fn(...args);
+      timer = null;
+    }, delay);
+  };
 };
 
 // Fetch database structure if not provided
 const fetchDatabaseStructure = async () => {
-  if (!props.databaseStructure && props.isOpen) {
+  if (!props.databaseStructure && props.isOpen && !isLoading.value) {
+    isLoading.value = true;
+    
+    // Cancel any previous fetch operations
+    if (fetchAbortController) {
+      fetchAbortController.abort();
+    }
+    
+    // Create a new AbortController for this fetch operation
+    fetchAbortController = new AbortController();
+    
     try {
       const structure = await GetLatestDatabaseStructure();
       if (structure) {
         databaseStructure.value = structure;
       }
     } catch (error) {
-      console.error('Error fetching database structure:', error);
+      // Only log errors that aren't from aborted requests
+      if (error.name !== 'AbortError') {
+        console.error('Error fetching database structure:', error);
+      }
+    } finally {
+      isLoading.value = false;
     }
   } else if (props.databaseStructure) {
     databaseStructure.value = props.databaseStructure;
   }
 };
 
+// Debounced version of fetchDatabaseStructure
+const debouncedFetchDatabaseStructure = debounce(fetchDatabaseStructure, 300);
+
 // Prevent body scrolling when modal is open
 watch(() => props.isOpen, (isOpen) => {
   if (isOpen) {
     document.body.style.overflow = 'hidden';
-    fetchDatabaseStructure();
+    debouncedFetchDatabaseStructure();
   } else {
     document.body.style.overflow = '';
+    
+    // Cancel any pending fetch operations when closing
+    if (fetchAbortController) {
+      fetchAbortController.abort();
+      fetchAbortController = null;
+    }
   }
 });
 
@@ -77,7 +134,7 @@ watch(() => props.databaseStructure, (newValue) => {
   if (newValue) {
     databaseStructure.value = newValue;
   }
-});
+}, { immediate: true });
 
 // Handle escape key to close modal
 const handleKeyDown = (event: KeyboardEvent) => {
@@ -88,11 +145,19 @@ const handleKeyDown = (event: KeyboardEvent) => {
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown);
-  fetchDatabaseStructure();
+  if (props.isOpen) {
+    debouncedFetchDatabaseStructure();
+  }
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown);
+  
+  // Clean up any pending fetch operations
+  if (fetchAbortController) {
+    fetchAbortController.abort();
+    fetchAbortController = null;
+  }
 });
 </script>
 
