@@ -47,16 +47,16 @@
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
                                 </svg>
-                                Database Browser: {{ databaseConnection.Database }}
+                                <span class="truncate">Database Browser: {{ databaseConnection.Database }}</span>
                             </h3>
                             <p class="mt-1 max-w-2xl text-sm opacity-80 flex items-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                 </svg>
-                                {{ databaseConnection.Username }}@{{ databaseConnection.Host }}:{{ databaseConnection.Port }}
+                                <span class="truncate">{{ databaseConnection.Username }}@{{ databaseConnection.Host }}:{{ databaseConnection.Port }}</span>
                             </p>
                         </div>
-                        <div class="mt-3 sm:mt-0 flex items-center space-x-2">
+                        <div class="mt-3 sm:mt-0 flex items-center flex-wrap gap-2">
                             <button 
                                 @click="showDiagramModal" 
                                 class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-indigo-600 bg-white hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
@@ -64,7 +64,8 @@
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                                 </svg>
-                                Show Diagram
+                                <span class="hidden sm:inline">Show Diagram</span>
+                                <span class="sm:hidden">Diagram</span>
                             </button>
                             <button 
                                 @click="refreshStructure" 
@@ -73,7 +74,7 @@
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                 </svg>
-                                Refresh
+                                <span class="hidden sm:inline">Refresh</span>
                             </button>
                             <button 
                                 @click="() => loadDatabaseStructure(true)" 
@@ -82,16 +83,30 @@
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                                 </svg>
-                                Refresh Structures
+                                <span class="hidden sm:inline">Refresh Structures</span>
+                                <span class="sm:hidden">Refresh All</span>
                             </button>
                         </div>
                     </div>
                 </div>
                 
-                <!-- Browser layout -->
-                <div class="flex flex-col md:flex-row">
-                    <!-- Table list (sidebar) -->
-                    <div class="w-full md:w-64 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                <!-- Browser layout with responsive drawer -->
+                <div class="flex flex-col md:flex-row relative">
+                    <!-- Mobile sidebar toggle -->
+                    <button 
+                        @click="toggleSidebar" 
+                        class="md:hidden absolute top-2 right-2 z-10 bg-indigo-600 text-white p-2 rounded-full shadow-lg"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                
+                    <!-- Table list (sidebar) - responsive with transition -->
+                    <div 
+                        class="w-full md:w-64 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 transition-all duration-300 ease-in-out overflow-hidden flex flex-col"
+                        :class="isSidebarOpen || !isMobile ? 'max-h-[calc(100vh-188px)]' : 'max-h-0 md:max-h-[calc(100vh-188px)]'"
+                    >
                         <div class="p-4 border-b border-gray-200 dark:border-gray-700">
                             <h4 class="font-medium text-gray-700 dark:text-gray-300 flex items-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
@@ -115,30 +130,98 @@
                                     class="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                                 />
                             </div>
+                            <!-- Enhanced filtering options -->
+                            <div class="mt-2 grid grid-cols-2 gap-2">
+                                <select
+                                    v-model="tableFilterType"
+                                    class="block w-full pl-3 pr-10 py-1.5 text-xs border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                >
+                                    <option value="all">All tables</option>
+                                    <option value="system">System tables</option>
+                                    <option value="data">Data tables</option>
+                                </select>
+                                <select
+                                    v-model="tableSortOrder"
+                                    class="block w-full pl-3 pr-10 py-1.5 text-xs border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                >
+                                    <option value="name">Sort by name</option>
+                                    <option value="columns">Sort by columns</option>
+                                    <option value="recent">Recently viewed</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="overflow-y-auto h-[calc(100vh-300px)] scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600">
+                        <div class="overflow-y-auto flex-grow scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600">
                             <ul class="divide-y divide-gray-200 dark:divide-gray-700">
                                 <li 
                                     v-for="table in filteredTables" 
                                     :key="table.name"
-                                    @click="selectTable(table.name)"
                                     class="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150"
                                     :class="selectedTable === table.name ? 'bg-indigo-50 dark:bg-indigo-900/30 border-l-4 border-indigo-500' : ''"
                                 >
-                                    <div class="px-4 py-3">
+                                    <div 
+                                        @click="toggleTableExpand(table.name)"
+                                        class="px-4 py-3 flex items-center justify-between"
+                                    >
                                         <div class="flex items-center">
                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-indigo-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
                                                 <path fill-rule="evenodd" d="M5 4a3 3 0 00-3 3v6a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H5zm-1 9v-1h5v2H5a1 1 0 01-1-1zm7 1h4a1 1 0 001-1v-1h-5v2zm0-4h5V8h-5v2zM9 8H4v2h5V8z" clip-rule="evenodd" />
                                             </svg>
-                                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[160px]">
                                                 {{ table.name }}
                                             </span>
                                         </div>
-                                        <div class="mt-1 text-xs text-gray-500 dark:text-gray-400 flex items-center">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                                                <path d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" />
+                                        <div class="flex items-center">
+                                            <span class="text-xs bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 rounded-full px-2 py-0.5 mr-2">
+                                                {{ table.columns.length }}
+                                            </span>
+                                            <svg 
+                                                xmlns="http://www.w3.org/2000/svg" 
+                                                class="h-4 w-4 transform transition-transform duration-200" 
+                                                :class="expandedTables.includes(table.name) ? 'rotate-180' : ''"
+                                                fill="none" 
+                                                viewBox="0 0 24 24" 
+                                                stroke="currentColor"
+                                            >
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                                             </svg>
-                                            {{ table.columns.length }} columns
+                                        </div>
+                                    </div>
+                                    <div 
+                                        @click="selectTable(table.name)"
+                                        class="border-t border-gray-100 dark:border-gray-700 px-4 py-1 bg-gray-50 dark:bg-gray-800/50"
+                                        :class="selectedTable === table.name ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''"
+                                    >
+                                        <div class="flex justify-end">
+                                            <button class="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 px-2 py-1">
+                                                Browse
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <!-- Collapsible columns section -->
+                                    <div v-if="expandedTables.includes(table.name)" class="bg-gray-50 dark:bg-gray-800/30 px-4 pb-2 border-t border-gray-100 dark:border-gray-700">
+                                        <input 
+                                            type="text" 
+                                            v-model="columnFilters[table.name]" 
+                                            placeholder="Filter columns..." 
+                                            class="w-full mt-1 py-1 px-2 text-xs border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                        />
+                                        <div class="mt-1 max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600">
+                                            <div 
+                                                v-for="column in filteredColumns(table)" 
+                                                :key="`${table.name}-${column.name}`"
+                                                class="flex items-center py-1 text-xs border-b border-gray-100 dark:border-gray-700 last:border-0"
+                                            >
+                                                <div class="flex-1 flex items-center">
+                                                    <span 
+                                                        class="w-2 h-2 rounded-full mr-2"
+                                                        :class="column.isPrimary ? 'bg-amber-500' : column.key ? 'bg-blue-500' : 'bg-gray-400'"
+                                                    ></span>
+                                                    <span class="font-medium text-gray-700 dark:text-gray-300">{{ column.name }}</span>
+                                                </div>
+                                                <div class="text-gray-500 dark:text-gray-400 truncate max-w-[100px]">
+                                                    {{ column.type }}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </li>
@@ -149,19 +232,29 @@
                     <!-- Main content area -->
                     <div class="flex-1 overflow-x-auto">
                         <div v-if="!selectedTable" class="flex items-center justify-center h-[calc(100vh-300px)]">
-                            <div class="text-center">
+                            <div class="text-center px-4">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400 dark:text-gray-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
                                 </svg>
                                 <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Select a table</h3>
                                 <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Choose a table from the list to view its data</p>
+                                
+                                <!-- Mobile-only table selection -->
+                                <div class="md:hidden mt-4">
+                                    <button
+                                        @click="toggleSidebar"
+                                        class="px-4 py-2 bg-indigo-600 text-white rounded-md shadow-sm hover:bg-indigo-700 transition-colors duration-200"
+                                    >
+                                        Open Table List
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         
                         <div v-else>
-                            <!-- Tabs -->
-                            <div class="px-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-                                <div class="flex space-x-8">
+                            <!-- Tabs - scrollable on mobile -->
+                            <div class="px-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 overflow-x-auto">
+                                <div class="flex space-x-8 whitespace-nowrap">
                                     <button 
                                         @click="activeTab = 'data'" 
                                         class="py-4 border-b-2 font-medium text-sm flex items-center"
@@ -196,14 +289,14 @@
                             </div>
                             
                             <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-                                <div class="flex items-center justify-between">
-                                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
+                                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+                                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center mb-3 sm:mb-0">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-indigo-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
                                             <path fill-rule="evenodd" d="M5 4a3 3 0 00-3 3v6a3 3 0 003 3h10a3 3 0 003-3V7a3 3 0 00-3-3H5zm-1 9v-1h5v2H5a1 1 0 01-1-1zm7 1h4a1 1 0 001-1v-1h-5v2zm0-4h5V8h-5v2zM9 8H4v2h5V8z" clip-rule="evenodd" />
                                         </svg>
-                                        {{ selectedTable }}
+                                        <span class="truncate max-w-[200px] sm:max-w-full">{{ selectedTable }}</span>
                                     </h3>
-                                    <div class="flex space-x-2">
+                                    <div class="flex flex-wrap gap-2">
                                         <button 
                                             @click="exportTableData" 
                                             class="px-3 py-1.5 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200 flex items-center"
@@ -211,7 +304,7 @@
                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                             </svg>
-                                            Export
+                                            <span class="hidden sm:inline">Export</span>
                                         </button>
                                         <button 
                                             @click="refreshTableData()" 
@@ -220,7 +313,7 @@
                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                             </svg>
-                                            Refresh
+                                            <span class="hidden sm:inline">Refresh</span>
                                         </button>
                                         <select 
                                             v-model="rowLimit" 
@@ -254,7 +347,7 @@
                                                 <thead class="bg-gray-50 dark:bg-gray-800">
                                                     <tr>
                                                         <th v-for="column in tableColumns" :key="column"
-                                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                                            class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">
                                                             {{ column }}
                                                         </th>
                                                     </tr>
@@ -262,8 +355,11 @@
                                                 <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                                                     <tr v-for="(row, rowIndex) in tableData" :key="rowIndex" class="hover:bg-gray-50 dark:hover:bg-gray-800/70 transition-colors duration-150">
                                                         <td v-for="column in tableColumns" :key="`${rowIndex}-${column}`"
-                                                            class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                            class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 max-w-[200px] truncate">
                                                             <span v-if="row[column] === null" class="text-gray-400 dark:text-gray-500 italic">NULL</span>
+                                                            <span v-else-if="typeof row[column] === 'string' && row[column].length > 100" class="cursor-pointer hover:underline" @click="showFullCellContent(row[column])">
+                                                                {{ row[column].substring(0, 100) }}...
+                                                            </span>
                                                             <span v-else>{{ row[column] }}</span>
                                                         </td>
                                                     </tr>
@@ -272,12 +368,12 @@
                                         </div>
                                         
                                         <!-- Enhanced pagination -->
-                                        <div class="flex items-center justify-between mt-4">
+                                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mt-4 gap-3">
                                             <div class="text-sm text-gray-700 dark:text-gray-300 flex items-center">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1 text-indigo-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
                                                     <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" />
                                                 </svg>
-                                                <span>
+                                                <span class="text-xs sm:text-sm">
                                                     Showing <span class="font-medium">{{ tableData.length }}</span> rows
                                                     <span v-if="tableDataTotalRows[`${databaseConnection.Database}_${selectedTable}`]" class="ml-1">
                                                         of <span class="font-medium">{{ tableDataTotalRows[`${databaseConnection.Database}_${selectedTable}`] }}</span> total
@@ -319,61 +415,7 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Structure Tab -->
-                                <div v-else-if="activeTab === 'structure'">
-                                    <div class="border border-gray-200 dark:border-gray-700 rounded-md shadow-sm overflow-hidden">
-                                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                            <thead class="bg-gray-50 dark:bg-gray-800">
-                                                <tr>
-                                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                        Column
-                                                    </th>
-                                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                        Type
-                                                    </th>
-                                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                        Nullable
-                                                    </th>
-                                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                        Key
-                                                    </th>
-                                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                        Default
-                                                    </th>
-                                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                                        Extra
-                                                    </th>
-                                                </tr>
-                                            </thead>
-                                            <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                                                <tr v-for="column in selectedTableColumns" :key="column.name">
-                                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                                                        {{ column.name }}
-                                                    </td>
-                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                        {{ column.type }}
-                                                    </td>
-                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                        {{ column.nullable === 'YES' ? 'Yes' : 'No' }}
-                                                    </td>
-                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                        <span v-if="column.isPrimary" class="text-amber-600 dark:text-amber-400 font-medium">Primary</span>
-                                                        <span v-else-if="column.key">{{ column.key }}</span>
-                                                        <span v-else>-</span>
-                                                    </td>
-                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                        {{ column.default || 'NULL' }}
-                                                    </td>
-                                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                        {{ column.extra || '-' }}
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                                
-                                <!-- SQL Tab -->
+                                <!-- SQL Tab optimized for mobile -->
                                 <div v-else-if="activeTab === 'sql'">
                                     <div class="bg-gray-100 dark:bg-gray-800 rounded-lg p-4 mb-4">
                                         <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 flex items-center">
@@ -386,20 +428,20 @@
                                             <Editor 
                                                 v-model="sqlQuery" 
                                                 placeholder="Enter your SQL query here..." 
-                                                height="180px"
+                                                :height="isMobile ? '120px' : '180px'"
                                                 class="dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md"
                                             />
                                         </div>
-                                        <div class="flex justify-between">
+                                        <div class="flex flex-col sm:flex-row sm:justify-between gap-2">
                                             <div class="text-xs text-gray-500 dark:text-gray-400 flex items-center">
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                 </svg>
-                                                Use semicolons to separate multiple queries
+                                                <span class="text-xs">Use semicolons to separate queries</span>
                                             </div>
                                             <Button 
                                                 type="button" 
-                                                class="bg-indigo-600 hover:bg-indigo-700 flex items-center" 
+                                                class="bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center" 
                                                 @click="executeCustomQuery"
                                                 :disabled="sqlQueryLoading"
                                             >
@@ -411,7 +453,7 @@
                                             </Button>
                                         </div>
                                     </div>
-                                    
+
                                     <div v-if="sqlQueryResults.length > 0" class="mt-6">
                                         <h4 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4 flex items-center">
                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -480,7 +522,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, onBeforeMount, nextTick, onBeforeUnmount } from 'vue';
 import { GetDatabaseConnection, GetDatabaseStructure, TestQueryInDatabase, GetLatestDatabaseStructure } from '../../wailsjs/go/main/App';
 import { main } from '../../wailsjs/go/models';
 import Loader from '../components/Loader.vue';
@@ -501,7 +543,9 @@ interface StructureCacheType {
   [key: string]: any;
 }
 
+const prefetching = ref<boolean>(true);
 const loading = ref<boolean>(true);
+const componentReady = ref<boolean>(false);
 const hasConnection = ref<boolean>(false);
 const hasError = ref<boolean>(false);
 const errorMessage = ref<string>('An unexpected error occurred. Please try again.');
@@ -537,15 +581,90 @@ const structureCache = ref<StructureCacheType>({});
 const lastRefreshTime = ref<number>(0);
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
-// Filtered tables based on search
+const tableFilterType = ref<string>('all');
+const tableSortOrder = ref<string>('name');
+const expandedTables = ref<string[]>([]);
+const columnFilters = ref<{[key: string]: string}>({});
+const recentlyViewedTables = ref<string[]>([]);
+
+// Toggle table expansion
+const toggleTableExpand = (tableName: string) => {
+    if (expandedTables.value.includes(tableName)) {
+        expandedTables.value = expandedTables.value.filter(t => t !== tableName);
+    } else {
+        expandedTables.value.push(tableName);
+        // Initialize column filter if not exists
+        if (!columnFilters.value[tableName]) {
+            columnFilters.value[tableName] = '';
+        }
+    }
+};
+
+// Filtered columns based on search
+const filteredColumns = (table: any) => {
+    const filter = columnFilters.value[table.name] || '';
+    if (!filter) return table.columns;
+    
+    return table.columns.filter((column: any) => 
+        column.name.toLowerCase().includes(filter.toLowerCase()) ||
+        column.type.toLowerCase().includes(filter.toLowerCase())
+    );
+};
+
+// Optimized and enhanced table filtering based on multiple criteria
 const filteredTables = computed(() => {
     if (!dbStructure.value || !dbStructure.value.tables) return [];
     
-    if (!tableFilter.value) return dbStructure.value.tables;
+    // Step 1: Apply name filter
+    let result = dbStructure.value.tables;
+    if (tableFilter.value) {
+        result = result.filter((table: any) => 
+            table.name.toLowerCase().includes(tableFilter.value.toLowerCase())
+        );
+    }
     
-    return dbStructure.value.tables.filter((table: any) => 
-        table.name.toLowerCase().includes(tableFilter.value.toLowerCase())
-    );
+    // Step 2: Apply type filter
+    if (tableFilterType.value !== 'all') {
+        if (tableFilterType.value === 'system') {
+            // System tables typically start with these prefixes
+            const systemPrefixes = ['mysql', 'information_schema', 'performance_schema', 'sys', 'pg_'];
+            result = result.filter((table: any) => 
+                systemPrefixes.some(prefix => table.name.toLowerCase().startsWith(prefix))
+            );
+        } else if (tableFilterType.value === 'data') {
+            // Non-system tables
+            const systemPrefixes = ['mysql', 'information_schema', 'performance_schema', 'sys', 'pg_'];
+            result = result.filter((table: any) => 
+                !systemPrefixes.some(prefix => table.name.toLowerCase().startsWith(prefix))
+            );
+        }
+    }
+    
+    // Step 3: Apply sorting
+    result = [...result].sort((a: any, b: any) => {
+        if (tableSortOrder.value === 'columns') {
+            return b.columns.length - a.columns.length;
+        } else if (tableSortOrder.value === 'recent') {
+            const aIndex = recentlyViewedTables.value.indexOf(a.name);
+            const bIndex = recentlyViewedTables.value.indexOf(b.name);
+            
+            // If both tables are in recently viewed, sort by recency
+            if (aIndex !== -1 && bIndex !== -1) {
+                return aIndex - bIndex;
+            }
+            // If only one table is in recently viewed, prioritize it
+            if (aIndex !== -1) return -1;
+            if (bIndex !== -1) return 1;
+            
+            // Otherwise, fall back to name sorting
+            return a.name.localeCompare(b.name);
+        } else {
+            // Default to name sorting
+            return a.name.localeCompare(b.name);
+        }
+    });
+    
+    return result;
 });
 
 // Get columns for the selected table
@@ -578,8 +697,19 @@ const retryLoading = async () => {
     }
 };
 
-// Initialize the page
+// Enhanced loading mechanism
+onBeforeMount(() => {
+    prefetching.value = true;
+    loading.value = true;
+});
+
+// Initialize the page with improved transitions
 onMounted(async () => {
+    // Add a small delay for smoother transitions
+    setTimeout(() => {
+        prefetching.value = false;
+    }, 50);
+    
     // Add a safety timeout to prevent endless loading
     const timeout = setTimeout(() => {
         if (loading.value) {
@@ -606,6 +736,11 @@ onMounted(async () => {
     } finally {
         loading.value = false;
         clearTimeout(timeout);
+        
+        // Mark component as ready after a slight delay for smoother transition
+        setTimeout(() => {
+            componentReady.value = true;
+        }, 100);
     }
 });
 
@@ -740,15 +875,28 @@ const refreshStructure = async () => {
 
 // Select a table
 const selectTable = async (tableName: string) => {
+    // Close sidebar on mobile when selecting a table
+    if (isMobile.value) {
+        isSidebarOpen.value = false;
+    }
+    
     // Limpar cache de dados de tabela ao mudar de tabela
     if (selectedTable.value !== tableName) {
         tableData.value = [];
         tableColumns.value = [];
         currentPage.value = 0;
+        
+        // Track recently viewed tables
+        recentlyViewedTables.value = recentlyViewedTables.value.filter(t => t !== tableName);
+        recentlyViewedTables.value.unshift(tableName);
+        // Keep only the 10 most recent tables
+        if (recentlyViewedTables.value.length > 10) {
+            recentlyViewedTables.value = recentlyViewedTables.value.slice(0, 10);
+        }
     }
     
     selectedTable.value = tableName;
-    activeTab.value = 'structure';
+    activeTab.value = 'data';
     
     // Pre-populate SQL query with SELECT statement
     sqlQuery.value = `SELECT * FROM \`${tableName}\` LIMIT 100;`;
@@ -1035,4 +1183,73 @@ const handleDiagramRefresh = (newStructure: string) => {
         }
     }, 200);
 };
-</script> 
+
+// Add mobile responsiveness
+const isMobile = ref<boolean>(false);
+const isSidebarOpen = ref<boolean>(false);
+
+const checkMobileState = () => {
+    isMobile.value = window.innerWidth < 768;
+    // If switching to desktop, ensure sidebar is visible
+    if (!isMobile.value) {
+        isSidebarOpen.value = true;
+    }
+};
+
+const toggleSidebar = () => {
+    isSidebarOpen.value = !isSidebarOpen.value;
+};
+
+// Handle responsive layout
+onMounted(() => {
+    checkMobileState();
+    window.addEventListener('resize', checkMobileState);
+});
+
+// Clean up event listeners
+onBeforeUnmount(() => {
+    window.removeEventListener('resize', checkMobileState);
+});
+
+// Function to show full cell content in a modal
+const showFullCellContent = (content: string) => {
+    if (!content) return;
+    
+    // Simple alert for now, but could be replaced with a proper modal
+    alert(content);
+};
+</script>
+
+<style scoped>
+/* Smooth fade-in transitions for the database browser components */
+.container {
+    transition: opacity 0.3s ease-in-out;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
+}
+
+/* Table-specific transitions */
+.table-fade-enter-active,
+.table-fade-leave-active {
+    transition: all 0.2s ease-in-out;
+}
+
+.table-fade-enter-from,
+.table-fade-leave-to {
+    opacity: 0;
+    transform: translateY(10px);
+}
+
+/* Remove flash of unstyled content */
+[v-cloak] {
+    display: none;
+}
+</style> 
