@@ -725,9 +725,205 @@ func (s *SQLAssistant) GenerateSQL(prompt string) (string, error) {
 				return "", false
 			},
 		},
+		// Nova regra para capturar "selecione id da tabela X onde id e maior que Y"
+		{
+			pattern: `(?i)selecione\s+(?:a\s+coluna\s+)?([a-zA-Z0-9_]+)\s+d[aeo]\s+(?:tabela\s+)?([a-zA-Z0-9_]+)\s+onde\s+([a-zA-Z0-9_]+)\s+(?:e|é)\s+maior\s+que\s+([0-9]+)`,
+			handler: func(matches []string) (string, bool) {
+				if len(matches) < 5 {
+					return "", false
+				}
+
+				colName := matches[1]
+				tableName := matches[2]
+				whereColName := matches[3]
+				whereValue := matches[4]
+
+				// Check if table and columns exist
+				tableExists := false
+				colExists := false
+				whereColExists := false
+
+				for _, table := range s.dbStructure.Tables {
+					if strings.EqualFold(table.Name, tableName) {
+						tableExists = true
+						tableName = table.Name // Use case-sensitive correct name
+
+						for _, col := range table.Columns {
+							if strings.EqualFold(col.Name, colName) {
+								colExists = true
+								colName = col.Name // Use case-sensitive correct name
+							}
+							if strings.EqualFold(col.Name, whereColName) {
+								whereColExists = true
+								whereColName = col.Name // Use case-sensitive correct name
+							}
+						}
+
+						break
+					}
+				}
+
+				if tableExists && colExists && whereColExists {
+					sql := fmt.Sprintf("SELECT %s FROM %s WHERE %s > %s",
+						colName, tableName, whereColName, whereValue)
+					return sql, true
+				}
+
+				// Fallback with SELECT * if table exists but columns weren't found
+				if tableExists && !colExists && !whereColExists {
+					sql := fmt.Sprintf("SELECT * FROM %s WHERE id > %s", tableName, whereValue)
+					return sql, true
+				} else if tableExists && whereColExists {
+					sql := fmt.Sprintf("SELECT * FROM %s WHERE %s > %s", tableName, whereColName, whereValue)
+					return sql, true
+				} else if tableExists {
+					sql := fmt.Sprintf("SELECT * FROM %s", tableName)
+					return sql, true
+				}
+
+				return "", false
+			},
+		},
+		// Nova regra para capturar "selecione id da tabela X onde id e maior ou igual que Y"
+		{
+			pattern: `(?i)selecione\s+(?:a\s+coluna\s+)?([a-zA-Z0-9_]+)\s+d[aeo]\s+(?:tabela\s+)?([a-zA-Z0-9_]+)\s+onde\s+([a-zA-Z0-9_]+)\s+(?:e|é)\s+maior\s+ou\s+igual\s+(?:a|que)\s+([0-9]+)`,
+			handler: func(matches []string) (string, bool) {
+				if len(matches) < 5 {
+					return "", false
+				}
+
+				colName := matches[1]
+				tableName := matches[2]
+				whereColName := matches[3]
+				whereValue := matches[4]
+
+				// Check if table and columns exist
+				tableExists := false
+				colExists := false
+				whereColExists := false
+
+				for _, table := range s.dbStructure.Tables {
+					if strings.EqualFold(table.Name, tableName) {
+						tableExists = true
+						tableName = table.Name // Use case-sensitive correct name
+
+						for _, col := range table.Columns {
+							if strings.EqualFold(col.Name, colName) {
+								colExists = true
+								colName = col.Name // Use case-sensitive correct name
+							}
+							if strings.EqualFold(col.Name, whereColName) {
+								whereColExists = true
+								whereColName = col.Name // Use case-sensitive correct name
+							}
+						}
+
+						break
+					}
+				}
+
+				if tableExists && colExists && whereColExists {
+					sql := fmt.Sprintf("SELECT %s FROM %s WHERE %s >= %s",
+						colName, tableName, whereColName, whereValue)
+					return sql, true
+				}
+
+				// Fallback with SELECT * if table exists but columns weren't found
+				if tableExists && !colExists && !whereColExists {
+					sql := fmt.Sprintf("SELECT * FROM %s WHERE id >= %s", tableName, whereValue)
+					return sql, true
+				} else if tableExists && whereColExists {
+					sql := fmt.Sprintf("SELECT * FROM %s WHERE %s >= %s", tableName, whereColName, whereValue)
+					return sql, true
+				} else if tableExists {
+					sql := fmt.Sprintf("SELECT * FROM %s", tableName)
+					return sql, true
+				}
+
+				return "", false
+			},
+		},
+		// General pattern to capture free-form where conditions with descriptive operators in Portuguese
+		{
+			pattern: `(?i)selecione\s+(?:a\s+coluna\s+)?([a-zA-Z0-9_]+)\s+d[aeo]\s+(?:tabela\s+)?([a-zA-Z0-9_]+)\s+onde\s+(?:a\s+coluna\s+)?([a-zA-Z0-9_]+)\s+(?:e|é|for|seja|está)\s+([^0-9\s][^<>=]*?)\s+([0-9]+)`,
+			handler: func(matches []string) (string, bool) {
+				if len(matches) < 6 {
+					return "", false
+				}
+
+				colName := matches[1]
+				tableName := matches[2]
+				whereColName := matches[3]
+				operatorText := strings.TrimSpace(matches[4])
+				whereValue := matches[5]
+
+				// Map text operators to SQL operators
+				operator := "="
+				operatorText = strings.ToLower(operatorText)
+
+				if strings.Contains(operatorText, "maior") && strings.Contains(operatorText, "igual") {
+					operator = ">="
+				} else if strings.Contains(operatorText, "maior") {
+					operator = ">"
+				} else if strings.Contains(operatorText, "menor") && strings.Contains(operatorText, "igual") {
+					operator = "<="
+				} else if strings.Contains(operatorText, "menor") {
+					operator = "<"
+				} else if strings.Contains(operatorText, "diferente") || strings.Contains(operatorText, "não igual") {
+					operator = "!="
+				} else if strings.Contains(operatorText, "igual") {
+					operator = "="
+				}
+
+				// Check if table and columns exist
+				tableExists := false
+				colExists := false
+				whereColExists := false
+
+				for _, table := range s.dbStructure.Tables {
+					if strings.EqualFold(table.Name, tableName) {
+						tableExists = true
+						tableName = table.Name // Use case-sensitive correct name
+
+						for _, col := range table.Columns {
+							if strings.EqualFold(col.Name, colName) {
+								colExists = true
+								colName = col.Name // Use case-sensitive correct name
+							}
+							if strings.EqualFold(col.Name, whereColName) {
+								whereColExists = true
+								whereColName = col.Name // Use case-sensitive correct name
+							}
+						}
+
+						break
+					}
+				}
+
+				if tableExists && colExists && whereColExists {
+					sql := fmt.Sprintf("SELECT %s FROM %s WHERE %s %s %s",
+						colName, tableName, whereColName, operator, whereValue)
+					return sql, true
+				}
+
+				// Fallback with SELECT * if table exists but columns weren't found
+				if tableExists && !colExists && !whereColExists {
+					sql := fmt.Sprintf("SELECT * FROM %s WHERE id %s %s", tableName, operator, whereValue)
+					return sql, true
+				} else if tableExists && whereColExists {
+					sql := fmt.Sprintf("SELECT * FROM %s WHERE %s %s %s", tableName, whereColName, operator, whereValue)
+					return sql, true
+				} else if tableExists {
+					sql := fmt.Sprintf("SELECT * FROM %s", tableName)
+					return sql, true
+				}
+
+				return "", false
+			},
+		},
 	}
 
-	// Verificar padrões específicos para consultas em inglês
+	// English pattern definitions
 	enPatterns := []struct {
 		pattern string
 		handler func([]string) (string, bool)
@@ -749,7 +945,7 @@ func (s *SQLAssistant) GenerateSQL(prompt string) (string, error) {
 				whereValue = strings.TrimPrefix(whereValue, "equal to ")
 				whereValue = strings.TrimPrefix(whereValue, "equal ")
 
-				// Verificar se tabela e colunas existem
+				// Check if table and columns exist
 				tableExists := false
 				colExists := false
 				whereColExists := false
@@ -757,13 +953,16 @@ func (s *SQLAssistant) GenerateSQL(prompt string) (string, error) {
 				for _, table := range s.dbStructure.Tables {
 					if strings.EqualFold(table.Name, tableName) {
 						tableExists = true
+						tableName = table.Name // Use case-sensitive correct name
 
 						for _, col := range table.Columns {
 							if strings.EqualFold(col.Name, colName) {
 								colExists = true
+								colName = col.Name // Use case-sensitive correct name
 							}
 							if strings.EqualFold(col.Name, whereColName) {
 								whereColExists = true
+								whereColName = col.Name // Use case-sensitive correct name
 							}
 						}
 
@@ -772,13 +971,13 @@ func (s *SQLAssistant) GenerateSQL(prompt string) (string, error) {
 				}
 
 				if tableExists && colExists && whereColExists {
-					sql := fmt.Sprintf("SELECT %s.%s FROM %s WHERE %s.%s = '%s'",
-						tableName, colName, tableName, tableName, whereColName, whereValue)
+					sql := fmt.Sprintf("SELECT %s FROM %s WHERE %s = '%s'",
+						tableName, colName, tableName, whereColName, whereValue)
 
 					if regexp.MustCompile(`^\d+(\.\d+)?$`).MatchString(whereValue) ||
 						whereValue == "true" || whereValue == "false" {
-						sql = fmt.Sprintf("SELECT %s.%s FROM %s WHERE %s.%s = %s",
-							tableName, colName, tableName, tableName, whereColName, whereValue)
+						sql = fmt.Sprintf("SELECT %s FROM %s WHERE %s = %s",
+							tableName, colName, tableName, whereColName, whereValue)
 					}
 
 					return sql, true
@@ -797,12 +996,12 @@ func (s *SQLAssistant) GenerateSQL(prompt string) (string, error) {
 
 				tableName := matches[2]
 
-				// Verificar se a tabela existe
+				// Check if the table exists
 				tableExists := false
 				for _, table := range s.dbStructure.Tables {
 					if strings.EqualFold(table.Name, tableName) {
 						tableExists = true
-						tableName = table.Name // usar o nome correto com case sensitive
+						tableName = table.Name // Use case-sensitive correct name
 						break
 					}
 				}
@@ -815,37 +1014,9 @@ func (s *SQLAssistant) GenerateSQL(prompt string) (string, error) {
 				return "", false
 			},
 		},
-		// Count records in table
-		{
-			pattern: `(?i)(count|total|number\s+of)\s+(?:records|rows|items|elements)\s+(?:in|from)\s+(?:table\s+)?([a-zA-Z0-9_]+)`,
-			handler: func(matches []string) (string, bool) {
-				if len(matches) < 3 {
-					return "", false
-				}
-
-				tableName := matches[2]
-
-				// Verificar se a tabela existe
-				tableExists := false
-				for _, table := range s.dbStructure.Tables {
-					if strings.EqualFold(table.Name, tableName) {
-						tableExists = true
-						tableName = table.Name // usar o nome correto com case sensitive
-						break
-					}
-				}
-
-				if tableExists {
-					sql := fmt.Sprintf("SELECT COUNT(*) FROM %s", tableName)
-					return sql, true
-				}
-
-				return "", false
-			},
-		},
 	}
 
-	// Tentar padrões em português primeiro
+	// Verify specific patterns for Portuguese queries
 	for _, pattern := range ptPatterns {
 		matches := regexp.MustCompile(pattern.pattern).FindStringSubmatch(prompt)
 		if len(matches) > 0 {
