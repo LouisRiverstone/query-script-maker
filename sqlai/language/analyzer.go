@@ -590,16 +590,91 @@ func (p *PromptAnalyzer) normalizePortuguesePrompt(prompt string) string {
 	prompt = regexp.MustCompile(`(?i)onde\s+(?:a|o)\s+(?:coluna|campo)\s+([a-zA-Z0-9_\.]+)\s+(?:é|vale|contém)\s+(['"]?)([^'"]+)(['"]?)`).
 		ReplaceAllString(prompt, "onde $1 = $2$3$4")
 
+	// Padronizar outros operadores de comparação
+	prompt = regexp.MustCompile(`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+(?:é\s+)?maior\s+que\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 > $2$3$4")
+	prompt = regexp.MustCompile(`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+(?:é\s+)?maior\s+do\s+que\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 > $2$3$4")
+	prompt = regexp.MustCompile(`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+(?:é\s+)?maior\s+ou\s+igual\s+(?:a|que)\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 >= $2$3$4")
+	prompt = regexp.MustCompile(`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+(?:é\s+)?menor\s+que\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 < $2$3$4")
+	prompt = regexp.MustCompile(`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+(?:é\s+)?menor\s+do\s+que\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 < $2$3$4")
+	prompt = regexp.MustCompile(`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+(?:é\s+)?menor\s+ou\s+igual\s+(?:a|que)\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 <= $2$3$4")
+	prompt = regexp.MustCompile(`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+(?:é\s+)?diferente\s+de\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 != $2$3$4")
+	prompt = regexp.MustCompile(`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+(?:é\s+)?não\s+é\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 != $2$3$4")
+
+	// Padronizar expressões com "for"
+	prompt = regexp.MustCompile(`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+for\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 = $2$3$4")
+	prompt = regexp.MustCompile(`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+for\s+(?:maior|superior)\s+(?:a|que)\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 > $2$3$4")
+	prompt = regexp.MustCompile(`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+for\s+(?:maior|superior)\s+ou\s+igual\s+(?:a|que)\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 >= $2$3$4")
+	prompt = regexp.MustCompile(`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+for\s+(?:menor|inferior)\s+(?:a|que)\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 < $2$3$4")
+	prompt = regexp.MustCompile(`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+for\s+(?:menor|inferior)\s+ou\s+igual\s+(?:a|que)\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 <= $2$3$4")
+
+	// Padronizar coluna a direita do operador
+	prompt = regexp.MustCompile(`(?i)onde\s+(?:a|o)\s+(?:coluna|campo)\s+([a-zA-Z0-9_\.]+)\s+(?:é\s+)?maior\s+que\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 > $2$3$4")
+	prompt = regexp.MustCompile(`(?i)onde\s+(?:a|o)\s+(?:coluna|campo)\s+([a-zA-Z0-9_\.]+)\s+(?:é\s+)?maior\s+ou\s+igual\s+(?:a|que)\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 >= $2$3$4")
+	prompt = regexp.MustCompile(`(?i)onde\s+(?:a|o)\s+(?:coluna|campo)\s+([a-zA-Z0-9_\.]+)\s+(?:é\s+)?menor\s+que\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 < $2$3$4")
+	prompt = regexp.MustCompile(`(?i)onde\s+(?:a|o)\s+(?:coluna|campo)\s+([a-zA-Z0-9_\.]+)\s+(?:é\s+)?menor\s+ou\s+igual\s+(?:a|que)\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 <= $2$3$4")
+
 	// Padronizar menções a tabelas e colunas
 	prompt = regexp.MustCompile(`(?i)da\s+tabela\s+([a-zA-Z0-9_]+)`).
 		ReplaceAllString(prompt, "da tabela $1")
+	prompt = regexp.MustCompile(`(?i)na\s+tabela\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "na tabela $1")
+	prompt = regexp.MustCompile(`(?i)para\s+a\s+tabela\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "para a tabela $1")
+	prompt = regexp.MustCompile(`(?i)dados\s+da\s+tabela\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "dados da tabela $1")
+	prompt = regexp.MustCompile(`(?i)registros\s+da\s+tabela\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "registros da tabela $1")
+	prompt = regexp.MustCompile(`(?i)entidade\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "tabela $1")
+	prompt = regexp.MustCompile(`(?i)entidades\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "tabela $1")
+	prompt = regexp.MustCompile(`(?i)dentro\s+da\s+tabela\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "na tabela $1")
+
 	prompt = regexp.MustCompile(`(?i)a\s+coluna\s+([a-zA-Z0-9_]+)`).
 		ReplaceAllString(prompt, "a coluna $1")
 	prompt = regexp.MustCompile(`(?i)o\s+campo\s+([a-zA-Z0-9_]+)`).
 		ReplaceAllString(prompt, "a coluna $1")
+	prompt = regexp.MustCompile(`(?i)o\s+atributo\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "a coluna $1")
+	prompt = regexp.MustCompile(`(?i)os\s+dados\s+de\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "a coluna $1")
+	prompt = regexp.MustCompile(`(?i)as\s+informações\s+de\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "a coluna $1")
+	prompt = regexp.MustCompile(`(?i)o\s+valor\s+de\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "a coluna $1")
+	prompt = regexp.MustCompile(`(?i)a\s+propriedade\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "a coluna $1")
 
 	// Padronizar referências a coluna.tabela e tabela.coluna
 	prompt = regexp.MustCompile(`(?i)(?:a|o)\s+(?:coluna|campo)\s+([a-zA-Z0-9_]+)\s+da\s+tabela\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "a coluna $2.$1")
+	prompt = regexp.MustCompile(`(?i)(?:a|o)\s+(?:coluna|campo)\s+([a-zA-Z0-9_]+)\s+na\s+tabela\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "a coluna $2.$1")
+	prompt = regexp.MustCompile(`(?i)(?:a|o)\s+(?:coluna|campo)\s+([a-zA-Z0-9_]+)\s+em\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "a coluna $2.$1")
+	prompt = regexp.MustCompile(`(?i)(?:a|o)\s+(?:coluna|campo|atributo)\s+([a-zA-Z0-9_]+)\s+(?:pertencente|pertence)\s+(?:a|à)\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "a coluna $2.$1")
+	prompt = regexp.MustCompile(`(?i)(?:os|as)\s+(?:dados|informações)\s+de\s+([a-zA-Z0-9_]+)\s+(?:da|na)\s+(?:tabela)\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "a coluna $2.$1")
+	prompt = regexp.MustCompile(`(?i)(?:a|o)\s+([a-zA-Z0-9_]+)\s+(?:da|do)\s+([a-zA-Z0-9_]+)`).
 		ReplaceAllString(prompt, "a coluna $2.$1")
 
 	// Melhorar padronização para operadores de comparação
@@ -631,6 +706,12 @@ func (p *PromptAnalyzer) enhanceTableColumnIdentifiers(prompt string) string {
 			`\bdados\s+(de|da|do)\s+["']?([a-zA-Z0-9_]+)["']?`,
 			`\bregistros?\s+(de|da|do)\s+["']?([a-zA-Z0-9_]+)["']?`,
 			`\bentidades?\s+(de|da|do)?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bpara\s+(a|o)\s+([a-zA-Z0-9_]+)\b`,
+			`\bentidades?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bobtenha\s+(?:dados|registros|informações)\s+(?:de|da|do)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bselecione\s+(?:da|na|de|do)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\b(consulte|liste|mostre|exiba)\s+(?:a|o)?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\b(cadastro|base|banco)\s+(?:de|da|do)?\s+["']?([a-zA-Z0-9_]+)["']?`,
 		},
 		"en": {
 			`\b(table|tables)\s+["']?([a-zA-Z0-9_]+)["']?`,
@@ -639,6 +720,12 @@ func (p *PromptAnalyzer) enhanceTableColumnIdentifiers(prompt string) string {
 			`\bdata\s+(from|of|in)\s+["']?([a-zA-Z0-9_]+)["']?`,
 			`\brecords?\s+(from|of|in)\s+["']?([a-zA-Z0-9_]+)["']?`,
 			`\bentit(y|ies)\s+(of|named)?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bfor\s+(?:the)?\s+([a-zA-Z0-9_]+)\b`,
+			`\bentit(?:y|ies)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bget\s+(?:data|records|information)\s+(?:from|of)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bselect\s+(?:from|in)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\b(query|list|show|display)\s+(?:the)?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\b(catalog|database|store)\s+(?:of)?\s+["']?([a-zA-Z0-9_]+)["']?`,
 		},
 	}
 
@@ -652,6 +739,17 @@ func (p *PromptAnalyzer) enhanceTableColumnIdentifiers(prompt string) string {
 			`\batributos?\s+(de|da|do)?\s+["']?([a-zA-Z0-9_]+)["']?`,
 			`\bpropriedades?\s+(de|da|do)?\s+["']?([a-zA-Z0-9_]+)["']?`,
 			`\bvalores?\s+(de|da|do|para)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\binformações?\s+(sobre|de|do|da)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bdados\s+(de|da|do)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bitem\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bvariável\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bentrada\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bparâmetro\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\b(?:o|a)\s+["']?([a-zA-Z0-9_]+)["']?\s+(?:da|do)\s+(?:tabela|entidade)\s+`,
+			`\bonde\s+["']?([a-zA-Z0-9_]+)["']?\s+(?:é|igual|=)`,
+			`\bcategorizado\s+por\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bagrupado\s+por\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bordenado\s+por\s+["']?([a-zA-Z0-9_]+)["']?`,
 		},
 		"en": {
 			`\b(column|field|attribute|property)\s+["']?([a-zA-Z0-9_]+)["']?`,
@@ -661,6 +759,17 @@ func (p *PromptAnalyzer) enhanceTableColumnIdentifiers(prompt string) string {
 			`\battributes?\s+(of|named|called)?\s+["']?([a-zA-Z0-9_]+)["']?`,
 			`\bproperties?\s+(of|named|called)?\s+["']?([a-zA-Z0-9_]+)["']?`,
 			`\bvalues?\s+(of|for|in)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\binformation\s+(about|of|for)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bdata\s+(of|for)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bitem\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bvariable\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bentry\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bparameter\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bthe\s+["']?([a-zA-Z0-9_]+)["']?\s+(?:of|from)\s+(?:table|entity)\s+`,
+			`\bwhere\s+["']?([a-zA-Z0-9_]+)["']?\s+(?:is|equals|=)`,
+			`\bcategorized\s+by\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bgrouped\s+by\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bordered\s+by\s+["']?([a-zA-Z0-9_]+)["']?`,
 		},
 	}
 
@@ -742,12 +851,41 @@ func (p *PromptAnalyzer) enhanceTableColumnIdentifiers(prompt string) string {
 		"pt": {
 			`(?i)onde\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+=\s+(['"]?)([^'"]+)(['"]?)`,
 			`(?i)onde\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+é\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)onde\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+>\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)onde\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+<\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)onde\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+>=\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)onde\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+<=\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)onde\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+!=\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)onde\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+(?:maior|superior)(?:\s+ou\s+igual)?\s+(?:a|que)\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)onde\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+(?:menor|inferior)(?:\s+ou\s+igual)?\s+(?:a|que)\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)onde\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+(?:diferente|não\s+é|distinto)\s+(?:de|que)?\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)onde\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+for\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)onde\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+for\s+(?:maior|superior)(?:\s+ou\s+igual)?\s+(?:a|que)\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)onde\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+for\s+(?:menor|inferior)(?:\s+ou\s+igual)?\s+(?:a|que)\s+(['"]?)([^'"]+)(['"]?)`,
 			`(?i)com\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+=\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)que\s+(?:tenha|possua|contenha)\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+(?:igual a|como|=)\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)cujo\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+(?:seja|é|=)\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)filtrando\s+(?:por|onde)\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+(?:é|=)\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)para\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+(?:igual a|=)\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)quando\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+(?:for|é|=)\s+(['"]?)([^'"]+)(['"]?)`,
 		},
 		"en": {
 			`(?i)where\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+=\s+(['"]?)([^'"]+)(['"]?)`,
 			`(?i)where\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+is\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)where\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+>\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)where\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+<\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)where\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+>=\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)where\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+<=\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)where\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+!=\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)where\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+(?:greater|higher|more)\s+(?:than|than\s+or\s+equal\s+to)\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)where\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+(?:less|lower|smaller)\s+(?:than|than\s+or\s+equal\s+to)\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)where\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+(?:different|not|distinct)\s+(?:from|than)?\s+(['"]?)([^'"]+)(['"]?)`,
 			`(?i)with\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+=\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)that\s+(?:has|have|contains)\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+(?:equal to|as|=)\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)whose\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+(?:is|=)\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)filtering\s+(?:by|where)\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+(?:is|=)\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)for\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+(?:equal to|=)\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)when\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+(?:is|=)\s+(['"]?)([^'"]+)(['"]?)`,
 		},
 	}
 

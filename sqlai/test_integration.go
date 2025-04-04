@@ -117,6 +117,16 @@ func TestWhereEqualCondition(t *testing.T) {
 			prompt:   "selecione a coluna rfam_id da tabela family onde a coluna rfam_acc = 3",
 			expected: "SELECT family.rfam_id FROM family WHERE family.rfam_acc = 3",
 		},
+		{
+			name:     "Prompt com 'menor ou igual a' numérico",
+			prompt:   "selecione a coluna rfam_id da tabela family onde a coluna rfam_acc for menor ou igual a 100",
+			expected: "SELECT family.rfam_id FROM family WHERE family.rfam_acc <= 100",
+		},
+		{
+			name:     "Prompt com 'menor que' numérico",
+			prompt:   "selecione a coluna rfam_id da tabela family onde a coluna rfam_acc for menor que 100",
+			expected: "SELECT family.rfam_id FROM family WHERE family.rfam_acc < 100",
+		},
 	}
 
 	for _, tc := range testCases {
