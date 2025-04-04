@@ -26,6 +26,9 @@ func (p *PromptAnalyzer) AnalyzePrompt(prompt string) (string, string) {
 	// Normalize prompt based on the detected language
 	normalizedPrompt := p.normalizePrompt(prompt)
 
+	// Adicionando etapa para realizar identificação explícita de tabelas e colunas
+	normalizedPrompt = p.enhanceTableColumnIdentifiers(normalizedPrompt)
+
 	return normalizedPrompt, p.language
 }
 
@@ -573,6 +576,199 @@ func (p *PromptAnalyzer) normalizePortuguesePrompt(prompt string) string {
 	prompt = regexp.MustCompile(`(?i)data de (hoje|agora)`).ReplaceAllString(prompt, "data = CURRENT_DATE()")
 	prompt = regexp.MustCompile(`(?i)hora (atual|corrente)`).ReplaceAllString(prompt, "HOUR(CURRENT_TIMESTAMP())")
 	prompt = regexp.MustCompile(`(?i)minuto (atual|corrente)`).ReplaceAllString(prompt, "MINUTE(CURRENT_TIMESTAMP())")
+
+	// Adicionar padronizações mais específicas para estrutura "onde coluna igual a valor"
+	// Isso ajudará a identificar condições mais facilmente
+	prompt = regexp.MustCompile(`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+é\s+igual\s+a\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 = $2$3$4")
+	prompt = regexp.MustCompile(`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+é\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 = $2$3$4")
+	prompt = regexp.MustCompile(`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+igual\s+a\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 = $2$3$4")
+	prompt = regexp.MustCompile(`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+vale\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 = $2$3$4")
+	prompt = regexp.MustCompile(`(?i)onde\s+(?:a|o)\s+(?:coluna|campo)\s+([a-zA-Z0-9_\.]+)\s+(?:é|vale|contém)\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 = $2$3$4")
+
+	// Padronizar menções a tabelas e colunas
+	prompt = regexp.MustCompile(`(?i)da\s+tabela\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "da tabela $1")
+	prompt = regexp.MustCompile(`(?i)a\s+coluna\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "a coluna $1")
+	prompt = regexp.MustCompile(`(?i)o\s+campo\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "a coluna $1")
+
+	// Padronizar referências a coluna.tabela e tabela.coluna
+	prompt = regexp.MustCompile(`(?i)(?:a|o)\s+(?:coluna|campo)\s+([a-zA-Z0-9_]+)\s+da\s+tabela\s+([a-zA-Z0-9_]+)`).
+		ReplaceAllString(prompt, "a coluna $2.$1")
+
+	// Melhorar padronização para operadores de comparação
+	// Usar grupo de captura para garantir que "é igual a valor" seja normalizado para "= valor"
+	prompt = regexp.MustCompile(`(?i)\s+é\s+igual\s+a\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, " = $1$2$3")
+	prompt = regexp.MustCompile(`(?i)\s+é\s+igual\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, " = $1$2$3")
+	prompt = regexp.MustCompile(`(?i)\s+igual\s+a\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, " = $1$2$3")
+	prompt = regexp.MustCompile(`(?i)\s+vale\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, " = $1$2$3")
+
+	// Padronizar "onde coluna = valor" para garantir que o operador esteja correto
+	prompt = regexp.MustCompile(`(?i)onde\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+é\s+(['"]?)([^'"]+)(['"]?)`).
+		ReplaceAllString(prompt, "onde $1 = $2$3$4")
+
+	return prompt
+}
+
+// enhanceTableColumnIdentifiers processa o prompt para destacar referências explícitas a tabelas e colunas
+func (p *PromptAnalyzer) enhanceTableColumnIdentifiers(prompt string) string {
+	// Expressões para identificar tabelas mencionadas explicitamente
+	tableExpressions := map[string][]string{
+		"pt": {
+			`\b(tabela|table)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\b(na|da|na|das|dos|nas|nos) tabelas?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\btabelas?\s+(de|dos|das)?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bdados\s+(de|da|do)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bregistros?\s+(de|da|do)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bentidades?\s+(de|da|do)?\s+["']?([a-zA-Z0-9_]+)["']?`,
+		},
+		"en": {
+			`\b(table|tables)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\b(in|from|to|on|of|the) tables?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\btables?\s+(of|for|with|containing)?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bdata\s+(from|of|in)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\brecords?\s+(from|of|in)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bentit(y|ies)\s+(of|named)?\s+["']?([a-zA-Z0-9_]+)["']?`,
+		},
+	}
+
+	// Expressões para identificar colunas mencionadas explicitamente
+	columnExpressions := map[string][]string{
+		"pt": {
+			`\b(coluna|campo|column|field|atributo)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\b(na|da|do|das|dos|nas|nos) colunas?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bcolunas?\s+(de|da|do)?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bcampos?\s+(de|da|do)?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\batributos?\s+(de|da|do)?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bpropriedades?\s+(de|da|do)?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bvalores?\s+(de|da|do|para)\s+["']?([a-zA-Z0-9_]+)["']?`,
+		},
+		"en": {
+			`\b(column|field|attribute|property)\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\b(in|from|with|having|on|of|the) columns?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bcolumns?\s+(of|named|called)?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bfields?\s+(of|named|called)?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\battributes?\s+(of|named|called)?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bproperties?\s+(of|named|called)?\s+["']?([a-zA-Z0-9_]+)["']?`,
+			`\bvalues?\s+(of|for|in)\s+["']?([a-zA-Z0-9_]+)["']?`,
+		},
+	}
+
+	// Expressões para identificar relações de tabela.coluna
+	qualifiedColumnExpressions := map[string][]string{
+		"pt": {
+			`\b([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\b`,
+			`\bcolunas?\s+([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\b`,
+			`\bcampos?\s+([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\b`,
+		},
+		"en": {
+			`\b([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\b`,
+			`\bcolumns?\s+([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\b`,
+			`\bfields?\s+([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\b`,
+		},
+	}
+
+	// Aplicar expressões para o idioma atual
+	lang := p.language
+	if _, exists := tableExpressions[lang]; !exists {
+		lang = "en" // Fallback para inglês
+	}
+
+	// Marcar tabelas no prompt
+	for _, expr := range tableExpressions[lang] {
+		re := regexp.MustCompile(expr)
+		prompt = re.ReplaceAllString(prompt, " TABELA:$2 ")
+	}
+
+	// Marcar colunas no prompt
+	for _, expr := range columnExpressions[lang] {
+		re := regexp.MustCompile(expr)
+		prompt = re.ReplaceAllString(prompt, " COLUNA:$2 ")
+	}
+
+	// Marcar colunas qualificadas no prompt (tabela.coluna)
+	for _, expr := range qualifiedColumnExpressions[lang] {
+		re := regexp.MustCompile(expr)
+		prompt = re.ReplaceAllString(prompt, " TABELA:$1 COLUNA:$2 ")
+	}
+
+	// Adicionar expressões específicas para o caso do exemplo
+	// "selecione a coluna X da tabela Y onde a coluna Z = valor"
+	specificExpressions := map[string][]string{
+		"pt": {
+			`(?i)selecione\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_]+)\s+d[aeo]\s+(?:tabela\s+)?([a-zA-Z0-9_]+)`,
+			`(?i)mostre\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_]+)\s+d[aeo]\s+(?:tabela\s+)?([a-zA-Z0-9_]+)`,
+			`(?i)liste\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_]+)\s+d[aeo]\s+(?:tabela\s+)?([a-zA-Z0-9_]+)`,
+			`(?i)exiba\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_]+)\s+d[aeo]\s+(?:tabela\s+)?([a-zA-Z0-9_]+)`,
+		},
+		"en": {
+			`(?i)select\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_]+)\s+from\s+(?:table\s+)?([a-zA-Z0-9_]+)`,
+			`(?i)show\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_]+)\s+from\s+(?:table\s+)?([a-zA-Z0-9_]+)`,
+			`(?i)list\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_]+)\s+from\s+(?:table\s+)?([a-zA-Z0-9_]+)`,
+			`(?i)display\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_]+)\s+from\s+(?:table\s+)?([a-zA-Z0-9_]+)`,
+		},
+	}
+
+	// Aplicar as expressões específicas
+	if _, exists := specificExpressions[lang]; !exists {
+		lang = "en" // Fallback para inglês
+	}
+
+	for _, expr := range specificExpressions[lang] {
+		re := regexp.MustCompile(expr)
+		matches := re.FindAllStringSubmatch(prompt, -1)
+		for _, match := range matches {
+			if len(match) > 2 {
+				colName := match[1]
+				tableName := match[2]
+				// Substituir por marcações explícitas
+				prompt += " COLUNA:" + colName + " TABELA:" + tableName + " "
+			}
+		}
+	}
+
+	// Aplicar expressões para condições WHERE explícitas
+	whereExpressions := map[string][]string{
+		"pt": {
+			`(?i)onde\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+=\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)onde\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+é\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)com\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_\.]+)\s+=\s+(['"]?)([^'"]+)(['"]?)`,
+		},
+		"en": {
+			`(?i)where\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+=\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)where\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+is\s+(['"]?)([^'"]+)(['"]?)`,
+			`(?i)with\s+(?:the\s+)?(?:column\s+)?([a-zA-Z0-9_\.]+)\s+=\s+(['"]?)([^'"]+)(['"]?)`,
+		},
+	}
+
+	for _, expr := range whereExpressions[lang] {
+		re := regexp.MustCompile(expr)
+		matches := re.FindAllStringSubmatch(prompt, -1)
+		for _, match := range matches {
+			if len(match) > 3 {
+				colName := match[1]
+				// Se tem um ponto, separar tabela e coluna
+				if strings.Contains(colName, ".") {
+					parts := strings.Split(colName, ".")
+					if len(parts) == 2 {
+						prompt += " TABELA:" + parts[0] + " COLUNA:" + parts[1] + " "
+					}
+				} else {
+					prompt += " COLUNA:" + colName + " "
+				}
+			}
+		}
+	}
 
 	return prompt
 }

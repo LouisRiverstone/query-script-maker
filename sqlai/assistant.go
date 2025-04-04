@@ -48,7 +48,7 @@ func GetSQLAssistant() *SQLAssistant {
 			aggregationFunctions: language.AggregationFunctionsEN,
 			dateFunctions:        language.DateFunctionsEN,
 			stringFunctions:      language.StringFunctionsEN,
-			confidenceThreshold:  0.65,
+			confidenceThreshold:  0.75,
 			maxJoinDepth:         3,
 			learningMode:         true,
 			promptAnalyzer:       language.NewPromptAnalyzer(),
@@ -135,6 +135,72 @@ func (s *SQLAssistant) GenerateSQL(prompt string) (string, error) {
 		return "", fmt.Errorf("database structure not initialized")
 	}
 
+	// Verificar padrão específico para o caso mencionado no exemplo
+	// "selecione a coluna rfam_id da tabela family onde a coluna rfam_acc é igual a 3"
+	specificPattern := `(?i)selecione\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_]+)\s+d[aeo]\s+(?:tabela\s+)?([a-zA-Z0-9_]+)\s+onde\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_]+)\s+(?:é\s+igual\s+a|é\s+igual|é|=)\s+(['"]?)([^'"]+)(['"]?)`
+
+	if matches := regexp.MustCompile(specificPattern).FindStringSubmatch(prompt); len(matches) > 5 {
+		colName := matches[1]
+		tableName := matches[2]
+		whereColName := matches[3]
+		whereValue := strings.TrimSpace(matches[5])
+
+		// Limpar o valor para retirar "igual a" caso tenha ficado
+		whereValue = strings.TrimPrefix(whereValue, "igual a ")
+		whereValue = strings.TrimPrefix(whereValue, "igual ")
+
+		// Verificar se a tabela e as colunas existem no esquema
+		tableExists := false
+		colExists := false
+		whereColExists := false
+
+		for _, table := range s.dbStructure.Tables {
+			if strings.EqualFold(table.Name, tableName) {
+				tableExists = true
+
+				for _, col := range table.Columns {
+					if strings.EqualFold(col.Name, colName) {
+						colExists = true
+					}
+					if strings.EqualFold(col.Name, whereColName) {
+						whereColExists = true
+					}
+				}
+
+				break
+			}
+		}
+
+		// Se a tabela e as colunas existem, retornar diretamente a consulta SQL
+		if tableExists && colExists && whereColExists {
+			sql := fmt.Sprintf("SELECT %s.%s FROM %s WHERE %s.%s = '%s'",
+				tableName, colName, tableName, tableName, whereColName, whereValue)
+
+			// Verificar se o valor é numérico ou booleano
+			if regexp.MustCompile(`^\d+(\.\d+)?$`).MatchString(whereValue) ||
+				whereValue == "true" || whereValue == "false" {
+				sql = fmt.Sprintf("SELECT %s.%s FROM %s WHERE %s.%s = %s",
+					tableName, colName, tableName, tableName, whereColName, whereValue)
+			}
+
+			// Cache the result
+			normalizedPrompt := strings.TrimSpace(strings.ToLower(prompt))
+			s.dbStructure.QueryCache[normalizedPrompt] = sql
+
+			// Add to query history for learning
+			if s.learningMode {
+				s.history = append(s.history, models.QueryHistory{
+					Query:     sql,
+					CreatedAt: time.Now(),
+					Success:   true,
+				})
+			}
+
+			return sql, nil
+		}
+	}
+
+	// Continuação normal do processamento para outros casos
 	// Analyze and normalize the prompt and detect language
 	analyzedPrompt, detectedLang := s.promptAnalyzer.AnalyzePrompt(prompt)
 	s.detectedLanguage = detectedLang
@@ -234,11 +300,9 @@ func (s *SQLAssistant) detectOperationAdvanced(prompt string) (string, []string)
 		"pt": {
 			"select": {
 				`(?i)selecionar`, `(?i)selecione`, `(?i)mostrar`, `(?i)mostre`, `(?i)listar`, `(?i)liste`,
-				`(?i)exibir`, `(?i)exiba`, `(?i)consultar`, `(?i)consulte`, `(?i)buscar`, `(?i)busque`,
-				`(?i)encontrar`, `(?i)encontre`, `(?i)quais são`, `(?i)quem são`, `(?i)onde estão`,
-				`(?i)me mostre`, `(?i)me traga`, `(?i)me dê`, `(?i)ver`, `(?i)veja`, `(?i)visualizar`,
-				`(?i)visualize`, `(?i)obter`, `(?i)obtenha`, `(?i)trazer`, `(?i)traga`,
-				`(?i)apresentar`, `(?i)apresente`,
+				`(?i)exibir`, `(?i)exiba`, `(?i)buscar`, `(?i)busque`, `(?i)obter`, `(?i)obtenha`,
+				`(?i)me mostre`, `(?i)me dê`, `(?i)quero ver`, `(?i)preciso ver`, `(?i)visualizar`,
+				`(?i)encontrar`, `(?i)encontre`, `(?i)consultar`, `(?i)consulte`,
 			},
 			"count": {
 				`(?i)contar`, `(?i)conte`, `(?i)quantos`, `(?i)quantas`, `(?i)quantidade de`,
@@ -476,7 +540,7 @@ func (s *SQLAssistant) detectOperationAdvanced(prompt string) (string, []string)
 	return bestOp, additionalOps
 }
 
-// extractEntitiesAdvanced extracts tables, columns and conditions with improved semantic understanding
+// extractEntitiesAdvanced detects tables, columns and conditions with improved accuracy
 func (s *SQLAssistant) extractEntitiesAdvanced(prompt string) ([]models.TableInfo, []models.ColumnInfo, []models.Condition) {
 	var tables []models.TableInfo
 	var columns []models.ColumnInfo
@@ -487,16 +551,31 @@ func (s *SQLAssistant) extractEntitiesAdvanced(prompt string) ([]models.TableInf
 	normalizedPrompt = strings.ReplaceAll(normalizedPrompt, "_", " ")
 	normalizedPrompt = " " + normalizedPrompt + " " // Add spaces to aid in word boundary detection
 
+	// Add specific markers for common table/column references in prompts
+	normalizedPrompt = regexp.MustCompile(`(?i)\b(da|de|do) tabela\s+(\w+)`).ReplaceAllString(normalizedPrompt, " TABELA:$2 ")
+	normalizedPrompt = regexp.MustCompile(`(?i)\b(da|de|do) coluna\s+(\w+)`).ReplaceAllString(normalizedPrompt, " COLUNA:$2 ")
+	normalizedPrompt = regexp.MustCompile(`(?i)\btable\s+(\w+)`).ReplaceAllString(normalizedPrompt, " TABELA:$1 ")
+	normalizedPrompt = regexp.MustCompile(`(?i)\bcolumn\s+(\w+)`).ReplaceAllString(normalizedPrompt, " COLUNA:$1 ")
+	normalizedPrompt = regexp.MustCompile(`(?i)\btabela\s+(\w+)`).ReplaceAllString(normalizedPrompt, " TABELA:$1 ")
+	normalizedPrompt = regexp.MustCompile(`(?i)\bcoluna\s+(\w+)`).ReplaceAllString(normalizedPrompt, " COLUNA:$1 ")
+
 	// Identify table names with improved confidence scores
 	tableScores := make(map[string]float64)
 	for _, table := range s.dbStructure.Tables {
 		tableName := strings.ToLower(table.Name)
 		normalizedTableName := strings.ReplaceAll(tableName, "_", " ")
 
+		// Explicitly referenced tables get perfect confidence
+		if strings.Contains(normalizedPrompt, " TABELA:"+tableName+" ") ||
+			strings.Contains(normalizedPrompt, " TABELA:"+normalizedTableName+" ") {
+			tableScores[table.Name] = 1.0
+			continue
+		}
+
 		// Exact match with word boundaries has highest confidence
 		if strings.Contains(normalizedPrompt, " "+tableName+" ") ||
 			strings.Contains(normalizedPrompt, " "+normalizedTableName+" ") {
-			tableScores[table.Name] = 1.0
+			tableScores[table.Name] = 0.95
 			continue
 		}
 
@@ -508,13 +587,13 @@ func (s *SQLAssistant) extractEntitiesAdvanced(prompt string) ([]models.TableInf
 
 		if strings.Contains(normalizedPrompt, " "+singular+" ") ||
 			strings.Contains(normalizedPrompt, " "+singularNormalized+" ") {
-			tableScores[table.Name] = 0.95
+			tableScores[table.Name] = 0.9
 			continue
 		}
 
 		if strings.Contains(normalizedPrompt, " "+plural+" ") ||
 			strings.Contains(normalizedPrompt, " "+pluralNormalized+" ") {
-			tableScores[table.Name] = 0.95
+			tableScores[table.Name] = 0.9
 			continue
 		}
 
@@ -523,20 +602,20 @@ func (s *SQLAssistant) extractEntitiesAdvanced(prompt string) ([]models.TableInf
 			strings.HasSuffix(normalizedPrompt, " "+tableName+" ") ||
 			strings.HasPrefix(normalizedPrompt, " "+normalizedTableName+" ") ||
 			strings.HasSuffix(normalizedPrompt, " "+normalizedTableName+" ") {
-			tableScores[table.Name] = 0.95
+			tableScores[table.Name] = 0.9
 			continue
 		}
 
 		// Check for exact match pattern with word boundaries
 		pattern := `\b` + regexp.QuoteMeta(tableName) + `\b`
 		if operations.RegexMatch(pattern, normalizedPrompt) {
-			tableScores[table.Name] = 0.9
+			tableScores[table.Name] = 0.85
 			continue
 		}
 
 		pattern = `\b` + regexp.QuoteMeta(normalizedTableName) + `\b`
 		if operations.RegexMatch(pattern, normalizedPrompt) {
-			tableScores[table.Name] = 0.9
+			tableScores[table.Name] = 0.85
 			continue
 		}
 
@@ -551,7 +630,7 @@ func (s *SQLAssistant) extractEntitiesAdvanced(prompt string) ([]models.TableInf
 			}
 
 			if matchCount == len(tableNameParts) {
-				tableScores[table.Name] = 0.85
+				tableScores[table.Name] = 0.8
 				continue
 			} else if matchCount > 0 {
 				partialScore := 0.5 + (0.3 * float64(matchCount) / float64(len(tableNameParts)))
@@ -570,7 +649,7 @@ func (s *SQLAssistant) extractEntitiesAdvanced(prompt string) ([]models.TableInf
 		if table.Description != "" && len(table.Description) > 3 {
 			desc := strings.ToLower(table.Description)
 			if strings.Contains(normalizedPrompt, desc) {
-				tableScores[table.Name] = 0.85
+				tableScores[table.Name] = 0.8
 			}
 		}
 	}
@@ -603,19 +682,40 @@ func (s *SQLAssistant) extractEntitiesAdvanced(prompt string) ([]models.TableInf
 					normalizedColName := strings.ReplaceAll(colName, "_", " ")
 
 					// Start with a base confidence derived from table confidence
-					baseConfidence := tableInfo.Confidence * 0.8
+					baseConfidence := tableInfo.Confidence * 0.85
+
+					// Explicit column reference gets perfect confidence
+					if strings.Contains(normalizedPrompt, " COLUNA:"+colName+" ") ||
+						strings.Contains(normalizedPrompt, " COLUNA:"+normalizedColName+" ") {
+						columnScores[tableInfo.Name][col.Name] = 1.0
+						continue
+					}
+
+					// Qualified column name (table.column) has highest confidence
+					qualifiedPattern := `\b` + regexp.QuoteMeta(strings.ToLower(tableInfo.Name)) + `\.` + regexp.QuoteMeta(colName) + `\b`
+					if operations.RegexMatch(qualifiedPattern, normalizedPrompt) {
+						columnScores[tableInfo.Name][col.Name] = 1.0
+						continue
+					}
 
 					// Exact match with word boundaries
 					pattern := `\b` + regexp.QuoteMeta(colName) + `\b`
 					if operations.RegexMatch(pattern, normalizedPrompt) {
-						columnScores[tableInfo.Name][col.Name] = math.Max(1.0, columnScores[tableInfo.Name][col.Name])
+						columnScores[tableInfo.Name][col.Name] = 0.95
 						continue
 					}
 
 					// Check for normalized column name (spaces instead of underscores)
 					pattern = `\b` + regexp.QuoteMeta(normalizedColName) + `\b`
 					if operations.RegexMatch(pattern, normalizedPrompt) {
-						columnScores[tableInfo.Name][col.Name] = math.Max(0.95, columnScores[tableInfo.Name][col.Name])
+						columnScores[tableInfo.Name][col.Name] = 0.9
+						continue
+					}
+
+					// Check for reference with "campo" or "field" followed by column name
+					fieldPattern := `\b(campo|field)\s+` + regexp.QuoteMeta(colName) + `\b`
+					if operations.RegexMatch(fieldPattern, normalizedPrompt) {
+						columnScores[tableInfo.Name][col.Name] = 0.95
 						continue
 					}
 
@@ -623,7 +723,7 @@ func (s *SQLAssistant) extractEntitiesAdvanced(prompt string) ([]models.TableInf
 					if col.Description != "" && len(col.Description) > 3 {
 						desc := strings.ToLower(col.Description)
 						if strings.Contains(normalizedPrompt, desc) {
-							columnScores[tableInfo.Name][col.Name] = math.Max(0.9, columnScores[tableInfo.Name][col.Name])
+							columnScores[tableInfo.Name][col.Name] = 0.85
 							continue
 						}
 					}
@@ -639,7 +739,7 @@ func (s *SQLAssistant) extractEntitiesAdvanced(prompt string) ([]models.TableInf
 						}
 
 						if matchCount == len(colParts) {
-							columnScores[tableInfo.Name][col.Name] = math.Max(0.85, columnScores[tableInfo.Name][col.Name])
+							columnScores[tableInfo.Name][col.Name] = 0.8
 							continue
 						} else if matchCount > 0 {
 							partialScore := baseConfidence + (0.2 * float64(matchCount) / float64(len(colParts)))
@@ -833,6 +933,66 @@ func (s *SQLAssistant) extractEntitiesAdvanced(prompt string) ([]models.TableInf
 		}
 	}
 
+	// Identificar condições explícitas em português - padrões como "onde coluna = valor"
+	// Adicionar explicitamente a detecção de condições em português
+	whereConditionPatterns := []string{
+		`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+(é\s+)?(igual\s+a|=|==)\s+['"]?([^'"]+)['"]?`,
+		`(?i)onde\s+([a-zA-Z0-9_\.]+)\s+(é|está)\s+(['"]?)([^'"]+)(['"]?)`,
+		`(?i)com\s+([a-zA-Z0-9_\.]+)\s+(igual\s+a|=|==)\s+['"]?([^'"]+)['"]?`,
+		`(?i)para\s+([a-zA-Z0-9_\.]+)\s+(igual\s+a|=|==)\s+['"]?([^'"]+)['"]?`,
+		`(?i)que\s+(?:tenha|tem|possui|contenha)\s+([a-zA-Z0-9_\.]+)\s+(igual\s+a|=|==)\s+['"]?([^'"]+)['"]?`,
+	}
+
+	for _, pattern := range whereConditionPatterns {
+		matches := regexp.MustCompile(pattern).FindAllStringSubmatch(normalizedPrompt, -1)
+		if len(matches) > 0 {
+			for _, match := range matches {
+				if len(match) >= 5 {
+					colName := match[1]
+					value := match[4]
+
+					// Tentar extrair o nome da tabela se a coluna estiver qualificada (tabela.coluna)
+					tableName := ""
+					if strings.Contains(colName, ".") {
+						parts := strings.Split(colName, ".")
+						tableName = parts[0]
+						colName = parts[1]
+					}
+
+					// Adicionar à lista de condições
+					conditions = append(conditions, models.Condition{
+						ColumnName:  colName,
+						TableName:   tableName,
+						Operator:    "=",
+						Value:       value,
+						Conjunction: "AND",
+					})
+
+					// Se encontramos uma condição específica, aumentamos a confiança
+					// da tabela e coluna correspondentes
+					if tableName != "" {
+						tableScores[tableName] = 1.0
+					}
+
+					// Se qualquer tabela já foi identificada, tentamos associar a coluna
+					if tableName == "" {
+						for _, dbTable := range s.dbStructure.Tables {
+							for _, col := range dbTable.Columns {
+								if strings.EqualFold(col.Name, colName) {
+									if columnScores[dbTable.Name] == nil {
+										columnScores[dbTable.Name] = make(map[string]float64)
+									}
+									columnScores[dbTable.Name][col.Name] = 1.0
+									break
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	return tables, columns, conditions
 }
 
@@ -859,155 +1019,327 @@ func (s *SQLAssistant) extractPotentialColumnNames(prompt string) []string {
 	return possibleColumns
 }
 
-// buildSQLQueryAdvanced builds complex SQL queries based on the detected entities and operations
+// buildSQLQueryAdvanced generates SQL based on extracted entities
 func (s *SQLAssistant) buildSQLQueryAdvanced(operation string, subOperations []string,
 	tables []models.TableInfo, columns []models.ColumnInfo, conditions []models.Condition, prompt string) string {
 
-	// Handle case when no tables were detected
-	if len(tables) == 0 {
-		// Try to find the most relevant table based on the query context
-		mostRelevantTable := operations.FindMostRelevantTable(prompt, s.dbStructure.Tables)
-		if mostRelevantTable != "" {
-			tables = append(tables, models.TableInfo{
-				Name:       mostRelevantTable,
-				Confidence: 0.6,
-			})
-		} else if len(s.dbStructure.Tables) > 0 {
-			// If we still don't have tables but have DB info,
-			// check if the query mentions specific columns
-			for _, table := range s.dbStructure.Tables {
-				// Skip system or metadata tables
-				if strings.HasPrefix(table.Name, "sys_") ||
-					strings.HasPrefix(table.Name, "meta_") ||
-					strings.HasPrefix(table.Name, "pg_") {
-					continue
-				}
+	// Se não encontramos uma operação válida mas o prompt contém palavras-chave em português, forçamos SELECT
+	if operation == "" {
+		ptSelectKeywords := []string{"selecione", "selecionar", "mostre", "exiba", "liste", "busque"}
+		for _, keyword := range ptSelectKeywords {
+			if strings.Contains(strings.ToLower(prompt), keyword) {
+				operation = "select"
+				break
+			}
+		}
+	}
 
-				// Check if any table column is mentioned in the query
-				for _, col := range table.Columns {
-					if strings.Contains(strings.ToLower(prompt), strings.ToLower(col.Name)) {
-						tables = append(tables, models.TableInfo{
-							Name:       table.Name,
-							Confidence: 0.5,
+	// Se ainda não temos uma operação, defaultamos para SELECT
+	if operation == "" {
+		operation = "select"
+	}
+
+	// Se não encontramos colunas, mas encontramos uma condição com coluna específica,
+	// adicionamos essa coluna à lista para garantir que seja usada
+	if len(columns) == 0 && len(conditions) > 0 {
+		for _, condition := range conditions {
+			if condition.ColumnName != "" {
+				// Verificar se essa coluna existe em alguma das tabelas identificadas
+				for _, table := range tables {
+					for _, dbTable := range s.dbStructure.Tables {
+						if dbTable.Name == table.Name {
+							for _, col := range dbTable.Columns {
+								if strings.EqualFold(col.Name, condition.ColumnName) {
+									columns = append(columns, models.ColumnInfo{
+										Name:       col.Name,
+										TableName:  table.Name,
+										Type:       col.Type,
+										IsPrimary:  col.IsPrimary,
+										Confidence: 1.0,
+									})
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Se ainda não temos colunas, mas temos tabelas, selecionamos * ou alguma coluna que faça sentido
+	if len(columns) == 0 && len(tables) > 0 {
+		// Buscar no prompt menções explícitas a colunas específicas
+		colMatches := regexp.MustCompile(`(?i)(coluna|campo|column)\s+([a-zA-Z0-9_]+)`).FindAllStringSubmatch(prompt, -1)
+		if len(colMatches) > 0 {
+			for _, match := range colMatches {
+				if len(match) > 2 {
+					colName := match[2]
+
+					// Verificar se essa coluna existe em alguma tabela identificada
+					for _, table := range tables {
+						for _, dbTable := range s.dbStructure.Tables {
+							if dbTable.Name == table.Name {
+								for _, col := range dbTable.Columns {
+									if strings.EqualFold(col.Name, colName) {
+										columns = append(columns, models.ColumnInfo{
+											Name:       col.Name,
+											TableName:  table.Name,
+											Type:       col.Type,
+											IsPrimary:  col.IsPrimary,
+											Confidence: 1.0,
+										})
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Verificar se temos um caso específico como "selecione a coluna X da tabela Y onde coluna Z = valor"
+	explicitPattern := `(?i)selecione\s+(?:a\s+)?(?:coluna\s+)?([a-zA-Z0-9_]+)\s+d[aeo]\s+(?:tabela\s+)?([a-zA-Z0-9_]+)`
+	explicitMatches := regexp.MustCompile(explicitPattern).FindAllStringSubmatch(prompt, -1)
+
+	if len(explicitMatches) > 0 {
+		for _, match := range explicitMatches {
+			if len(match) > 2 {
+				colName := match[1]
+				tableName := match[2]
+
+				// Limpar a lista de tabelas e colunas e adicionar apenas as mencionadas explicitamente
+				newTables := []models.TableInfo{}
+				newColumns := []models.ColumnInfo{}
+
+				// Verificar se a tabela existe
+				tableExists := false
+				for _, dbTable := range s.dbStructure.Tables {
+					if strings.EqualFold(dbTable.Name, tableName) {
+						newTables = append(newTables, models.TableInfo{
+							Name:       dbTable.Name,
+							Confidence: 1.0,
 						})
+						tableExists = true
+
+						// Verificar se a coluna existe nesta tabela
+						for _, col := range dbTable.Columns {
+							if strings.EqualFold(col.Name, colName) {
+								newColumns = append(newColumns, models.ColumnInfo{
+									Name:       col.Name,
+									TableName:  dbTable.Name,
+									Type:       col.Type,
+									IsPrimary:  col.IsPrimary,
+									Confidence: 1.0,
+								})
+								break
+							}
+						}
 						break
 					}
 				}
 
-				if len(tables) > 0 {
-					break // We found a candidate table
+				if tableExists {
+					tables = newTables
+					columns = newColumns
 				}
 			}
-
-			// If we still don't have tables, we don't add a default automatically
-			// Just continue with empty tables so operation-specific functions handle this case
 		}
 	}
 
-	// Check for explicit table and column mentions
-	explicitTableRegex := regexp.MustCompile(`(?i)(?:da|de|from)\s+tabela\s+(\w+)`)
-	if matches := explicitTableRegex.FindStringSubmatch(prompt); len(matches) > 1 {
-		explicitTable := matches[1]
-		// Verify this table exists in our schema
-		tableExists := false
+	// Verifica se não temos colunas mas temos tabelas
+	if len(columns) == 0 && len(tables) > 0 {
+		// Escolher alguns campos relevantes para a primeira tabela
+		tableName := tables[0].Name
+
 		for _, dbTable := range s.dbStructure.Tables {
-			if strings.EqualFold(dbTable.Name, explicitTable) {
-				// Replace the tables array entirely with this explicit mention
-				tables = []models.TableInfo{{
-					Name:       dbTable.Name, // Use correct case from schema
-					Confidence: 1.0,
-				}}
-				tableExists = true
+			if dbTable.Name == tableName {
+				// Procurar por campos ID, Name ou Title primeiro
+				priorityFields := []string{"id", "name", "title", "code", "key", "nome", "codigo", "chave"}
+				for _, field := range priorityFields {
+					for _, col := range dbTable.Columns {
+						if strings.Contains(strings.ToLower(col.Name), field) {
+							columns = append(columns, models.ColumnInfo{
+								Name:       col.Name,
+								TableName:  tableName,
+								Type:       col.Type,
+								IsPrimary:  col.IsPrimary,
+								Confidence: 0.9,
+							})
+							break
+						}
+					}
+					if len(columns) > 0 {
+						break
+					}
+				}
+
+				// Se ainda não temos colunas, adicionar apenas a primeira
+				if len(columns) == 0 && len(dbTable.Columns) > 0 {
+					columns = append(columns, models.ColumnInfo{
+						Name:       dbTable.Columns[0].Name,
+						TableName:  tableName,
+						Type:       dbTable.Columns[0].Type,
+						IsPrimary:  dbTable.Columns[0].IsPrimary,
+						Confidence: 0.8,
+					})
+				}
 				break
 			}
 		}
-
-		// If we found an explicit table mention but it doesn't exist in schema,
-		// we should still use it (the user might know better than us)
-		if !tableExists && explicitTable != "" {
-			tables = []models.TableInfo{{
-				Name:       explicitTable,
-				Confidence: 0.9,
-			}}
-		}
 	}
 
-	// Check for explicit column mentions
-	explicitColRegex := regexp.MustCompile(`(?i)(?:a coluna|as colunas|coluna|colunas|the column|the columns|column|columns)\s+(\w+)`)
-	if matches := explicitColRegex.FindStringSubmatch(prompt); len(matches) > 1 && len(tables) > 0 {
-		explicitCol := matches[1]
-		// If we have an explicit column mentioned, override any previously detected columns
-		columns = []models.ColumnInfo{{
-			Name:       explicitCol,
-			TableName:  tables[0].Name,
-			Confidence: 1.0,
-		}}
-	}
+	// Iniciar construção do SQL com base na operação detectada
+	var sqlBuilder strings.Builder
 
-	// If no columns were detected, select appropriate columns
-	if len(columns) == 0 && len(tables) > 0 {
-		columns = operations.SelectRelevantColumns(tables, operation, prompt, s.dbStructure.Tables)
-	}
+	// Select operation
+	if operation == "select" {
+		sqlBuilder.WriteString("SELECT ")
 
-	// Handle different types of operations
-	queryBuilder := operations.NewQueryBuilder(s.detectedLanguage, s.dbStructure.Tables)
-
-	switch operation {
-	case "select":
-		return queryBuilder.BuildSelectQuery(tables, columns, conditions, subOperations, prompt)
-
-	case "count":
-		return queryBuilder.BuildCountQuery(tables, columns, conditions, prompt)
-
-	case "join":
-		return queryBuilder.BuildJoinQuery(tables, columns, conditions, subOperations, prompt)
-
-	case "group":
-		return queryBuilder.BuildGroupByQuery(tables, columns, conditions, prompt)
-
-	case "order":
-		return queryBuilder.BuildOrderByQuery(tables, columns, conditions, prompt)
-
-	case "limit":
-		return queryBuilder.BuildLimitQuery(tables, columns, conditions, prompt)
-
-	case "distinct":
-		return queryBuilder.BuildDistinctQuery(tables, columns, conditions, prompt)
-
-	case "insert":
-		if len(tables) > 0 {
-			return queryBuilder.BuildInsertQuery(tables[0].Name, prompt)
-		}
-		if s.detectedLanguage == "pt" {
-			return "-- Não foi possível identificar a tabela para o INSERT"
+		// Determinar campos a serem selecionados
+		if len(columns) == 0 {
+			// Se não temos colunas, usar *
+			sqlBuilder.WriteString("*")
 		} else {
-			return "-- Unable to identify the table for INSERT"
+			// Adicionar colunas selecionadas
+			for i, col := range columns {
+				if i > 0 {
+					sqlBuilder.WriteString(", ")
+				}
+
+				// Se a coluna tem uma tabela explicitamente mencionada, incluir o nome da tabela
+				if col.TableName != "" {
+					sqlBuilder.WriteString(col.TableName)
+					sqlBuilder.WriteString(".")
+				}
+
+				sqlBuilder.WriteString(col.Name)
+			}
 		}
 
-	case "update":
+		// FROM clause
 		if len(tables) > 0 {
-			return queryBuilder.BuildUpdateQuery(tables[0].Name, conditions, prompt)
-		}
-		if s.detectedLanguage == "pt" {
-			return "-- Não foi possível identificar a tabela para o UPDATE"
-		} else {
-			return "-- Unable to identify the table for UPDATE"
+			sqlBuilder.WriteString(" FROM ")
+			sqlBuilder.WriteString(tables[0].Name)
+
+			// Processar JOINs caso seja necessário
+			if len(tables) > 1 {
+				// Implementação de JOIN (simplificada para este exemplo)
+				// Em um sistema completo, precisaríamos detectar relações entre tabelas
+				for i := 1; i < len(tables); i++ {
+					sqlBuilder.WriteString(" JOIN ")
+					sqlBuilder.WriteString(tables[i].Name)
+					sqlBuilder.WriteString(" ON ")
+
+					// Tentativa simples de determinar a relação
+					primaryTable := tables[0].Name
+					secondaryTable := tables[i].Name
+
+					// Verificar se há chaves estrangeiras para determinar a relação
+					relationFound := false
+
+					// Primeiro procurar nas definições de tabela
+					for _, dbTable := range s.dbStructure.Tables {
+						if dbTable.Name == secondaryTable {
+							for _, fk := range dbTable.ForeignKeys {
+								if fk.ReferencedTable == primaryTable {
+									sqlBuilder.WriteString(secondaryTable)
+									sqlBuilder.WriteString(".")
+									sqlBuilder.WriteString(fk.ColumnName)
+									sqlBuilder.WriteString(" = ")
+									sqlBuilder.WriteString(primaryTable)
+									sqlBuilder.WriteString(".")
+									sqlBuilder.WriteString(fk.ReferencedColumn)
+									relationFound = true
+									break
+								}
+							}
+						}
+					}
+
+					// Se não encontramos relação nas chaves estrangeiras,
+					// tentar uma abordagem heurística com IDs
+					if !relationFound {
+						sqlBuilder.WriteString(primaryTable)
+						sqlBuilder.WriteString(".id = ")
+						sqlBuilder.WriteString(secondaryTable)
+						sqlBuilder.WriteString(".id")
+					}
+				}
+			}
 		}
 
-	case "delete":
-		if len(tables) > 0 {
-			return queryBuilder.BuildDeleteQuery(tables[0].Name, conditions, prompt)
-		}
-		if s.detectedLanguage == "pt" {
-			return "-- Não foi possível identificar a tabela para o DELETE"
-		} else {
-			return "-- Unable to identify the table for DELETE"
-		}
+		// WHERE clause
+		if len(conditions) > 0 {
+			sqlBuilder.WriteString(" WHERE ")
 
-	default:
-		// Default to a SELECT query
-		return queryBuilder.BuildSelectQuery(tables, columns, conditions, subOperations, prompt)
+			for i, cond := range conditions {
+				if i > 0 {
+					sqlBuilder.WriteString(" AND ")
+				}
+
+				// Se a condição tem uma tabela explicitamente mencionada, incluir o nome da tabela
+				if cond.TableName != "" {
+					sqlBuilder.WriteString(cond.TableName)
+					sqlBuilder.WriteString(".")
+				} else if len(tables) > 0 {
+					// Tenta determinar a tabela correta para essa coluna
+					for _, table := range tables {
+						for _, dbTable := range s.dbStructure.Tables {
+							if dbTable.Name == table.Name {
+								for _, col := range dbTable.Columns {
+									if strings.EqualFold(col.Name, cond.ColumnName) {
+										sqlBuilder.WriteString(table.Name)
+										sqlBuilder.WriteString(".")
+										break
+									}
+								}
+							}
+						}
+					}
+				}
+
+				sqlBuilder.WriteString(cond.ColumnName)
+				sqlBuilder.WriteString(" ")
+
+				// Determinar o operador
+				if cond.Operator == "" {
+					sqlBuilder.WriteString("=")
+				} else {
+					sqlBuilder.WriteString(cond.Operator)
+				}
+
+				sqlBuilder.WriteString(" ")
+
+				// Formatar o valor com base no tipo de dados
+				formattedValue := cond.Value
+
+				// Verificar se o valor é numérico
+				if !regexp.MustCompile(`^\d+(\.\d+)?$`).MatchString(formattedValue) &&
+					formattedValue != "null" && formattedValue != "true" && formattedValue != "false" {
+					// Adicionar aspas para valores não numéricos
+					sqlBuilder.WriteString("'")
+					sqlBuilder.WriteString(formattedValue)
+					sqlBuilder.WriteString("'")
+				} else {
+					sqlBuilder.WriteString(formattedValue)
+				}
+			}
+		}
 	}
+
+	// Se não conseguimos construir nada, usar uma consulta SELECT * padrão
+	if sqlBuilder.Len() == 0 {
+		if len(tables) > 0 {
+			sqlBuilder.WriteString("SELECT * FROM ")
+			sqlBuilder.WriteString(tables[0].Name)
+		} else {
+			// Se não temos nenhuma tabela, retornar um erro em formato SQL
+			sqlBuilder.WriteString("-- Não foi possível gerar SQL: nenhuma tabela identificada")
+		}
+	}
+
+	return sqlBuilder.String()
 }
 
 // validateAndOptimizeSQL performs simple validation and optimization on the generated SQL
@@ -1152,102 +1484,287 @@ func (s *SQLAssistant) Reset() {
 	s.detectedLanguage = "en"
 }
 
-// enrichPromptWithContext enhances the prompt with database structural information
+// enrichPromptWithContext adds database context to improve understanding
 func (s *SQLAssistant) enrichPromptWithContext(prompt string) string {
-	// Skip if there are no tables in the structure
-	if len(s.dbStructure.Tables) == 0 {
-		return prompt
-	}
+	// Don't overload the prompt with too much context
+	maxContextLength := 1500
+	normalizedPrompt := strings.ToLower(prompt)
 
-	// Detect potential entities in the prompt
-	potentialEntities := s.identifyPotentialEntities(prompt)
-	if len(potentialEntities) == 0 {
-		return prompt
-	}
+	// Apply preprocessing to identify tables and columns explicitly mentioned
+	result, _ := s.promptAnalyzer.AnalyzePrompt(normalizedPrompt)
+	normalizedPrompt = result
 
-	// Find relevant tables that match the detected entities
-	var relevantTables []models.TableForAI
-	for _, entity := range potentialEntities {
+	// Extract potential entities from prompt
+	mentionedEntities := s.identifyPotentialEntities(normalizedPrompt)
+	potentialTables, potentialColumns := s.extractTablesAndColumnsFromPrompt(normalizedPrompt)
+
+	// Create a string builder for the enriched prompt
+	var sb strings.Builder
+
+	// Start with original prompt
+	sb.WriteString(prompt)
+	sb.WriteString("\n\n")
+
+	// Add context header
+	sb.WriteString("--- Database Context for Query Generation ---\n")
+
+	// Add current dialect information
+	sb.WriteString(fmt.Sprintf("Using dialect: %s\n", s.dialect.Name))
+
+	// Create a map to keep track of tables we've already seen (to avoid duplicates)
+	tablesSeen := make(map[string]bool)
+
+	// First, add context for explicitly mentioned tables (highest priority)
+	tablesAdded := 0
+	for _, tableName := range potentialTables {
+		if tablesSeen[tableName] {
+			continue
+		}
+
 		for _, table := range s.dbStructure.Tables {
-			// Check for exact match or plural form
-			singularEntity := strings.TrimSuffix(entity, "s")
-			pluralEntity := entity + "s"
+			if strings.EqualFold(table.Name, tableName) {
+				buildTableContext(&sb, table, s.dbStructure.Tables, tablesSeen, 0, s.maxJoinDepth)
+				tablesAdded++
+				break
+			}
+		}
 
-			// Use Jaro-Winkler similarity for fuzzy matching of table names
-			similarityThreshold := 0.85
+		// Avoid too much context
+		if sb.Len() > maxContextLength {
+			break
+		}
+	}
 
-			// Try different forms of the entity name
-			entityForms := []string{entity, singularEntity, pluralEntity}
-			for _, form := range entityForms {
-				similarity := util.JaroWinklerSimilarity(strings.ToLower(form), strings.ToLower(table.Name))
+	// If we still have room, add context for tables likely referenced by columns
+	if sb.Len() < maxContextLength {
+		for _, colName := range potentialColumns {
+			for _, table := range s.dbStructure.Tables {
+				if tablesSeen[table.Name] {
+					continue
+				}
 
-				if similarity >= similarityThreshold ||
-					strings.Contains(strings.ToLower(table.Name), strings.ToLower(form)) ||
-					strings.Contains(strings.ToLower(form), strings.ToLower(table.Name)) {
-					// Found a match
-					relevantTables = append(relevantTables, table)
+				for _, col := range table.Columns {
+					if strings.EqualFold(col.Name, colName) {
+						buildTableContext(&sb, table, s.dbStructure.Tables, tablesSeen, 0, s.maxJoinDepth)
+						tablesAdded++
+						break
+					}
+				}
+
+				// Avoid too much context
+				if sb.Len() > maxContextLength {
 					break
 				}
 			}
 		}
 	}
 
-	// If no relevant tables found by entity names, try to find by column names
-	if len(relevantTables) == 0 {
-		columnEntities := s.extractPotentialColumnNames(prompt)
-
-		for _, column := range columnEntities {
+	// If no tables were explicitly mentioned or identified, look at all entities
+	if tablesAdded == 0 {
+		for _, entity := range mentionedEntities {
+			// Try to find any tables or columns that match the entity names
 			for _, table := range s.dbStructure.Tables {
-				for _, col := range table.Columns {
-					// Use Jaro-Winkler similarity for fuzzy matching of column names
-					similarity := util.JaroWinklerSimilarity(strings.ToLower(column), strings.ToLower(col.Name))
+				// Skip tables we've already seen
+				if tablesSeen[table.Name] {
+					continue
+				}
 
-					if similarity >= 0.8 ||
-						strings.Contains(strings.ToLower(col.Name), strings.ToLower(column)) ||
-						strings.Contains(strings.ToLower(column), strings.ToLower(col.Name)) {
-						// Found a table containing a matching column
-						relevantTables = append(relevantTables, table)
+				tableName := strings.ToLower(table.Name)
+				normalizedTableName := strings.ReplaceAll(tableName, "_", " ")
+
+				// Check for similarity between entity and table name
+				if strings.Contains(entity, tableName) ||
+					strings.Contains(tableName, entity) ||
+					strings.Contains(entity, normalizedTableName) ||
+					strings.Contains(normalizedTableName, entity) {
+					buildTableContext(&sb, table, s.dbStructure.Tables, tablesSeen, 0, s.maxJoinDepth)
+					tablesAdded++
+				}
+
+				// Check for similarity between entity and any column name
+				for _, col := range table.Columns {
+					colName := strings.ToLower(col.Name)
+					normalizedColName := strings.ReplaceAll(colName, "_", " ")
+
+					if strings.Contains(entity, colName) ||
+						strings.Contains(colName, entity) ||
+						strings.Contains(entity, normalizedColName) ||
+						strings.Contains(normalizedColName, entity) {
+						buildTableContext(&sb, table, s.dbStructure.Tables, tablesSeen, 0, s.maxJoinDepth)
+						tablesAdded++
 						break
+					}
+				}
+
+				// Avoid too much context
+				if sb.Len() > maxContextLength || tablesAdded >= 3 {
+					break
+				}
+			}
+
+			// Avoid too much context
+			if sb.Len() > maxContextLength || tablesAdded >= 3 {
+				break
+			}
+		}
+	}
+
+	// If we still haven't added any tables or have minimal context, add the most relevant tables
+	if tablesAdded == 0 || sb.Len() < 500 {
+		commonTables := []string{"users", "customers", "orders", "products", "transactions", "accounts"}
+		for _, commonTable := range commonTables {
+			for _, table := range s.dbStructure.Tables {
+				if strings.EqualFold(table.Name, commonTable) && !tablesSeen[table.Name] {
+					buildTableContext(&sb, table, s.dbStructure.Tables, tablesSeen, 0, 1) // Limit depth for common tables
+					tablesAdded++
+					break
+				}
+			}
+
+			// Avoid too much context
+			if sb.Len() > maxContextLength || tablesAdded >= 3 {
+				break
+			}
+		}
+	}
+
+	// Add footer
+	sb.WriteString("--- End of Context ---\n\n")
+
+	return sb.String()
+}
+
+// extractTablesAndColumnsFromPrompt extrai tabelas e colunas do prompt usando regex mais precisos
+func (s *SQLAssistant) extractTablesAndColumnsFromPrompt(prompt string) ([]string, []string) {
+	var tables []string
+	var columns []string
+
+	// Procurando por tabelas explicitamente marcadas
+	tablePattern := `TABELA:([a-zA-Z0-9_]+)`
+	tableMatches := regexp.MustCompile(tablePattern).FindAllStringSubmatch(prompt, -1)
+	for _, match := range tableMatches {
+		if len(match) > 1 {
+			tableName := match[1]
+			if !util.ContainsString(tables, tableName) {
+				tables = append(tables, tableName)
+			}
+		}
+	}
+
+	// Procurando por colunas explicitamente marcadas
+	columnPattern := `COLUNA:([a-zA-Z0-9_]+)`
+	columnMatches := regexp.MustCompile(columnPattern).FindAllStringSubmatch(prompt, -1)
+	for _, match := range columnMatches {
+		if len(match) > 1 {
+			columnName := match[1]
+			if !util.ContainsString(columns, columnName) {
+				columns = append(columns, columnName)
+			}
+		}
+	}
+
+	// Se não encontramos tabelas explicitamente marcadas, tentamos extrair de outra forma
+	if len(tables) == 0 {
+		// Verificando cada tabela no banco de dados
+		for _, table := range s.dbStructure.Tables {
+			tableName := strings.ToLower(table.Name)
+			normalizedTableName := strings.ReplaceAll(tableName, "_", " ")
+
+			// Verificação com limites de palavras
+			tablePatternWithBoundary := `\b` + regexp.QuoteMeta(tableName) + `\b`
+			if operations.RegexMatch(tablePatternWithBoundary, prompt) {
+				tables = append(tables, table.Name)
+				continue
+			}
+
+			normalizedTablePatternWithBoundary := `\b` + regexp.QuoteMeta(normalizedTableName) + `\b`
+			if operations.RegexMatch(normalizedTablePatternWithBoundary, prompt) {
+				tables = append(tables, table.Name)
+				continue
+			}
+
+			// Verificações adicionais para singular/plural
+			singular := strings.TrimSuffix(tableName, "s")
+			plural := tableName + "s"
+
+			if len(singular) > 2 && singular != tableName {
+				singularPatternWithBoundary := `\b` + regexp.QuoteMeta(singular) + `\b`
+				if operations.RegexMatch(singularPatternWithBoundary, prompt) {
+					tables = append(tables, table.Name)
+					continue
+				}
+			}
+
+			if plural != tableName {
+				pluralPatternWithBoundary := `\b` + regexp.QuoteMeta(plural) + `\b`
+				if operations.RegexMatch(pluralPatternWithBoundary, prompt) {
+					tables = append(tables, table.Name)
+					continue
+				}
+			}
+		}
+	}
+
+	// Se não encontramos colunas explicitamente marcadas, tentamos extrair de outra forma
+	if len(columns) == 0 {
+		// Para cada tabela que encontramos, verificamos suas colunas
+		for _, tableName := range tables {
+			for _, table := range s.dbStructure.Tables {
+				if strings.EqualFold(table.Name, tableName) {
+					for _, col := range table.Columns {
+						colName := strings.ToLower(col.Name)
+						normalizedColName := strings.ReplaceAll(colName, "_", " ")
+
+						// Verificação com limites de palavras
+						colPatternWithBoundary := `\b` + regexp.QuoteMeta(colName) + `\b`
+						if operations.RegexMatch(colPatternWithBoundary, prompt) {
+							columns = append(columns, col.Name)
+							continue
+						}
+
+						normalizedColPatternWithBoundary := `\b` + regexp.QuoteMeta(normalizedColName) + `\b`
+						if operations.RegexMatch(normalizedColPatternWithBoundary, prompt) {
+							columns = append(columns, col.Name)
+							continue
+						}
+					}
+					break
+				}
+			}
+		}
+
+		// Se ainda não temos colunas, procuramos por colunas comuns
+		if len(columns) == 0 {
+			commonColumnPatterns := []string{
+				`\bid\b`, `\bname\b`, `\btitle\b`, `\bdescription\b`,
+				`\bnome\b`, `\btitulo\b`, `\bdescricao\b`,
+				`\bdata\b`, `\bdate\b`, `\btime\b`, `\bhora\b`,
+				`\bprice\b`, `\bpreco\b`, `\bvalor\b`, `\bquantity\b`, `\bquantidade\b`,
+				`\bstatus\b`, `\estado\b`, `\bsituacao\b`,
+				`\bemail\b`, `\bphone\b`, `\btelefone\b`,
+				`\baddress\b`, `\bendereco\b`,
+			}
+
+			for _, pattern := range commonColumnPatterns {
+				if operations.RegexMatch(pattern, prompt) {
+					// Encontrar a coluna correspondente na estrutura do BD
+					for _, table := range s.dbStructure.Tables {
+						for _, col := range table.Columns {
+							colName := strings.ToLower(col.Name)
+							if operations.RegexMatch(pattern, colName) {
+								columns = append(columns, col.Name)
+							}
+						}
 					}
 				}
 			}
 		}
 	}
 
-	// Limit the number of relevant tables to avoid excessive context
-	// Keep only the top 3 tables if there are too many
-	if len(relevantTables) > 3 {
-		relevantTables = relevantTables[:3]
-	}
-
-	// No relevant tables found
-	if len(relevantTables) == 0 {
-		return prompt
-	}
-
-	// Build context information recursively
-	var contextBuilder strings.Builder
-	tablesSeen := make(map[string]bool)
-
-	contextBuilder.WriteString("\nContext:\n")
-
-	// Process each table with depth tracking to avoid cycles
-	for _, table := range relevantTables {
-		if !tablesSeen[table.Name] {
-			// Process the table and add information to the context builder
-			buildTableContext(&contextBuilder, table, s.dbStructure.Tables, tablesSeen, 0, 2) // Set max depth to 2
-		}
-	}
-
-	// Only add context if we found useful information
-	if contextBuilder.Len() > 15 { // More than just "Context:" header
-		return prompt + contextBuilder.String()
-	}
-
-	return prompt
+	return tables, columns
 }
 
-// buildTableContext recursively builds context information about a table, its columns, and relations
+// buildTableContext builds a context string for a table and its related tables
 func buildTableContext(sb *strings.Builder, table models.TableForAI, allTables []models.TableForAI, tablesSeen map[string]bool, depth int, maxDepth int) {
 	if depth > maxDepth {
 		return // Prevent infinite recursion

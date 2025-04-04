@@ -197,6 +197,16 @@ func SortTablesByConfidence(tables []interface{}) {
 	}
 }
 
+// ContainsString checks if a string slice contains a specific string
+func ContainsString(slice []string, str string) bool {
+	for _, item := range slice {
+		if item == str {
+			return true
+		}
+	}
+	return false
+}
+
 // ExtractTablesFromSQL extracts table names from a SQL query
 func ExtractTablesFromSQL(sql string) []string {
 	var tables []string
